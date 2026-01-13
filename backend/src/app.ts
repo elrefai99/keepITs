@@ -1,8 +1,11 @@
 import './config/dotenv.config'
 import express, { Application, Request, Response } from 'express'
 import { mongoDBConfig } from './config/mongoDB.config';
+import appConfig from './app.config';
 
 const app: Application = express()
+
+appConfig(app)
 
 app.use(async (_req: Request, res: Response) => {
      res.status(404).send('This is not the API route you are looking for')
