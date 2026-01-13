@@ -155,9 +155,9 @@ export default {
 
 <template>
   <navbar />
-  <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4 font-sans transition-colors duration-300">
-    <div class="max-w-6xl mx-auto">
-      <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl dark:shadow-gray-900/50 overflow-hidden transition-colors duration-300">
+  <div min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4 font-sans transition-colors duration-300>
+    <div max-w-6xl mx-auto>
+      <div bg-white dark:bg-gray-800 rounded-3xl shadow-2xl overflow-hidden transition-colors duration-300 class="dark:shadow-gray-900/50">
         <!-- Header -->
         <div class="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-800 p-6 text-white transition-colors duration-300">
           <div class="flex justify-between items-center flex-wrap gap-4">

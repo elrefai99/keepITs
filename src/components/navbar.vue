@@ -2,7 +2,7 @@
 
 <template>
   <header>
-    <nav w-full bg-transparent>
+    <nav w-full bg-transparent dark:bg-gray-800 dark:text-gray-200>
       <div max-w-xl mx-auto flex items-center justify-center px-6 py-4>
         <div text-md md:flex items-center gap-8 opacity-80>
           <router-link to="/" hover:text-gray-500 dark:hover:text-white-400 transition active-class="border-b-2 border-current pb-1">Home</router-link>
