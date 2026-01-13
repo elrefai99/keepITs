@@ -1,176 +1,4 @@
-<template>
-  <div class="app">
-    <div class="container">
-      <div class="card">
-        <!-- Header -->
-        <div class="header">
-          <div class="header-content">
-            <div class="header-title">
-              <svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              <h1>Schedule Manager</h1>
-            </div>
-            <div class="today-date">Today: {{ todayFormatted }}</div>
-          </div>
-        </div>
-
-        <div class="content-grid">
-          <!-- Calendar View -->
-          <div class="calendar-section">
-            <div class="calendar-card">
-              <div class="calendar-header">
-                <button @click="changeMonth(-1)" class="nav-btn">
-                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <polyline points="15 18 9 12 15 6"/>
-                  </svg>
-                </button>
-                <h2>{{ monthName }} {{ currentYear }}</h2>
-                <button @click="changeMonth(1)" class="nav-btn">
-                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
-                </button>
-              </div>
-
-              <div class="weekdays">
-                <div v-for="day in weekDays" :key="day" class="weekday">{{ day }}</div>
-              </div>
-
-              <div class="calendar-grid">
-                <button
-                  v-for="(day, index) in calendarDays"
-                  :key="index"
-                  @click="day && handleDateClick(day)"
-                  :disabled="!day || isDateDisabled(day)"
-                  :class="getDayClass(day)"
-                  class="day-cell"
-                >
-                  <span v-if="day">{{ day.getDate() }}</span>
-                  <div v-if="day && hasTasksOnDate(day)" class="task-indicator"></div>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Day Detail View -->
-          <div class="detail-section">
-            <div v-if="selectedDate" class="detail-card">
-              <div class="detail-header">
-                <h2>{{ formatDate(selectedDate) }}</h2>
-                <button
-                  v-if="!isDateDisabled(selectedDate)"
-                  @click="showAddForm = !showAddForm"
-                  class="add-btn"
-                >
-                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <line x1="12" y1="5" x2="12" y2="19"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                  </svg>
-                  Add Task
-                </button>
-              </div>
-
-              <!-- Add Task Form -->
-              <div v-if="showAddForm" class="add-form">
-                <input
-                  v-model="newTask.title"
-                  type="text"
-                  placeholder="Task title"
-                  class="input"
-                />
-                <input
-                  v-model="newTask.time"
-                  type="time"
-                  class="input"
-                />
-                <textarea
-                  v-model="newTask.description"
-                  placeholder="Description (optional)"
-                  class="textarea"
-                  rows="3"
-                ></textarea>
-                <div class="form-actions">
-                  <button @click="handleAddTask" class="btn-save">Save</button>
-                  <button @click="showAddForm = false" class="btn-cancel">Cancel</button>
-                </div>
-              </div>
-
-              <!-- Tasks List -->
-              <div class="tasks-list">
-                <div v-if="currentTasks.length === 0" class="empty-state">
-                  <svg class="icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polyline points="12 6 12 12 16 14"/>
-                  </svg>
-                  <p>No tasks scheduled</p>
-                </div>
-
-                <div
-                  v-for="task in currentTasks"
-                  :key="task.id"
-                  :class="['task-item', { completed: task.completed }]"
-                >
-                  <div class="task-content">
-                    <button
-                      @click="toggleComplete(task.id)"
-                      :disabled="isDateDisabled(selectedDate)"
-                      :class="['checkbox', { checked: task.completed }]"
-                    >
-                      <svg v-if="task.completed" class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                    </button>
-                    <div class="task-details">
-                      <div class="task-time">
-                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                          <circle cx="12" cy="12" r="10"/>
-                          <polyline points="12 6 12 12 16 14"/>
-                        </svg>
-                        <span>{{ task.time }}</span>
-                      </div>
-                      <h3 :class="{ 'line-through': task.completed }">{{ task.title }}</h3>
-                      <p v-if="task.description" class="task-desc">{{ task.description }}</p>
-                    </div>
-                  </div>
-                  <button
-                    v-if="!isDateDisabled(selectedDate)"
-                    @click="deleteTaskItem(task.id)"
-                    class="delete-btn"
-                  >
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <line x1="18" y1="6" x2="6" y2="18"/>
-                      <line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="isDateDisabled(selectedDate)" class="warning">
-                This date is in the past. Viewing only.
-              </div>
-            </div>
-
-            <div v-else class="empty-detail">
-              <svg class="icon-xxl" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              <p>Select a date to view or add tasks</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script>
+<script lang="ts">
 import { ref, computed } from 'vue'
 import { useScheduleStore } from './stores/store';
 
@@ -180,10 +8,10 @@ export default {
   setup() {
     const store = useScheduleStore()
     
-    const currentDate = ref(new Date())
-    const selectedDate = ref(null)
-    const showAddForm = ref(false)
-    const newTask = ref({
+    const currentDate: any = ref(new Date())
+    const selectedDate: any = ref<Date | null>(null)
+    const showAddForm: any = ref(false)
+    const newTask: any = ref({
       title: '',
       time: '09:00',
       description: '',
@@ -197,17 +25,17 @@ export default {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December']
     
-    const formatDate = (date) => {
+    const formatDate = (date: Date) => {
       const year = date.getFullYear()
       const month = String(date.getMonth() + 1).padStart(2, '0')
       const day = String(date.getDate()).padStart(2, '0')
       return `${year}-${month}-${day}`
     }
     
-    const isDateDisabled = (date) => {
+    const isDateDisabled = (date: Date) => {
       const checkDate = new Date(date)
       checkDate.setHours(0, 0, 0, 0)
-      return checkDate < today
+      return checkDate < today  
     }
     
     const calendarDays = computed(() => {
@@ -238,12 +66,12 @@ export default {
       return store.getTasksForDate(dateKey).sort((a, b) => a.time.localeCompare(b.time))
     })
     
-    const hasTasksOnDate = (date) => {
+    const hasTasksOnDate = (date: Date) => {
       const dateKey = formatDate(date)
       return store.getTasksForDate(dateKey).length > 0
     }
     
-    const getDayClass = (day) => {
+    const getDayClass = (day: Date) => {
       if (!day) return ''
       
       const dateKey = formatDate(day)
@@ -260,7 +88,7 @@ export default {
       }
     }
     
-    const changeMonth = (delta) => {
+    const changeMonth = (delta: number) => {
       currentDate.value = new Date(
         currentDate.value.getFullYear(),
         currentDate.value.getMonth() + delta,
@@ -268,7 +96,7 @@ export default {
       )
     }
     
-    const handleDateClick = (date) => {
+    const handleDateClick = (date: Date) => {
       if (!isDateDisabled(date)) {
         selectedDate.value = date
         showAddForm.value = false
@@ -290,12 +118,12 @@ export default {
       showAddForm.value = false
     }
     
-    const toggleComplete = (taskId) => {
+    const toggleComplete = (taskId: string) => {
       const dateKey = formatDate(selectedDate.value)
       store.toggleTaskComplete(dateKey, taskId)
     }
     
-    const deleteTaskItem = (taskId) => {
+    const deleteTaskItem = (taskId: string) => {
       const dateKey = formatDate(selectedDate.value)
       store.deleteTask(dateKey, taskId)
     }
@@ -325,434 +153,199 @@ export default {
 }
 </script>
 
-<style>
-.app {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #EFF6FF 0%, #E0E7FF 100%);
-  padding: 1rem;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
+<template>
+  <navbar />
+  <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4 font-sans transition-colors duration-300">
+    <div class="max-w-6xl mx-auto">
+      <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl dark:shadow-gray-900/50 overflow-hidden transition-colors duration-300">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-800 p-6 text-white transition-colors duration-300">
+          <div class="flex justify-between items-center flex-wrap gap-4">
+            <div class="flex items-center gap-3">
+              <svg class="w-8 h-8 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <h1 class="text-3xl font-bold">Schedule Manager</h1>
+            </div>
+            <div class="text-sm opacity-90">Today: {{ todayFormatted }}</div>
+          </div>
+        </div>
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+          <!-- Calendar View -->
+          <div class="min-h-100">
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-2xl p-4 transition-colors duration-300">
+              <div class="flex justify-between items-center mb-4">
+                <button @click="changeMonth(-1)" class="bg-transparent border-none p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600">
+                  <svg class="w-5 h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <polyline points="15 18 9 12 15 6"/>
+                  </svg>
+                </button>
+                <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ monthName }} {{ currentYear }}</h2>
+                <button @click="changeMonth(1)" class="bg-transparent border-none p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600">
+                  <svg class="w-5 h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </button>
+              </div>
 
-.card {
-  background: white;
-  border-radius: 1.5rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
+              <div class="grid grid-cols-7 gap-2 mb-2">
+                <div v-for="day in weekDays" :key="day" class="text-center text-sm font-semibold text-gray-500 dark:text-gray-400 p-2">{{ day }}</div>
+              </div>
 
-.header {
-  background: linear-gradient(135deg, #2563EB 0%, #4F46E5 100%);
-  padding: 1.5rem;
-  color: white;
-}
+              <div class="grid grid-cols-7 gap-2">
+                <button
+                  v-for="(day, index) in calendarDays"
+                  :key="index"
+                  @click="day && handleDateClick(day)"
+                  :disabled="!day || isDateDisabled(day)"
+                  :class="[
+                    'aspect-square p-2 rounded-lg text-sm font-medium border-none cursor-pointer bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-200 transition-all relative flex flex-col items-center justify-center',
+                    {
+                      'hover:bg-gray-200 dark:hover:bg-gray-500': day && !isDateDisabled(day),
+                      'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed': day && isDateDisabled(day),
+                      'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold': day && formatDate(day) === todayFormatted && !(selectedDate && formatDate(day) === formatDate(selectedDate)),
+                      'bg-blue-600 dark:bg-blue-500 text-white shadow-lg shadow-blue-600/40 dark:shadow-blue-500/40': selectedDate && day && formatDate(day) === formatDate(selectedDate),
+                      'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200': day && hasTasksOnDate(day) && !(selectedDate && formatDate(day) === formatDate(selectedDate))
+                    }
+                  ]"
+                >
+                  <span v-if="day">{{ day.getDate() }}</span>
+                  <div 
+                    v-if="day && hasTasksOnDate(day)" 
+                    :class="[
+                      'w-1.5 h-1.5 rounded-full mt-0.5',
+                      selectedDate && formatDate(day) === formatDate(selectedDate) ? 'bg-white' : 'bg-blue-600 dark:bg-blue-400'
+                    ]"
+                  ></div>
+                </button>
+              </div>
+            </div>
+          </div>
 
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
+          <!-- Day Detail View -->
+          <div class="min-h-100">
+            <div v-if="selectedDate" class="bg-gray-50 dark:bg-gray-700 rounded-2xl p-4 transition-colors duration-300">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ formatDate(selectedDate) }}</h2>
+                <button
+                  v-if="!isDateDisabled(selectedDate)"
+                  @click="showAddForm = !showAddForm"
+                  class="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white border-none rounded-lg cursor-pointer font-medium transition-colors hover:bg-blue-700 dark:hover:bg-blue-600"
+                >
+                  <svg class="w-5 h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Add Task
+                </button>
+              </div>
 
-.header-title {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
+              <!-- Add Task Form -->
+              <div v-if="showAddForm" class="bg-white dark:bg-gray-600 p-4 rounded-lg mb-4 shadow-sm transition-colors duration-300">
+                <input
+                  v-model="newTask.title"
+                  type="text"
+                  placeholder="Task title"
+                  class="w-full p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-3 font-sans text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                />
+                <input
+                  v-model="newTask.time"
+                  type="time"
+                  class="w-full p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-3 font-sans text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors"
+                />
+                <textarea
+                  v-model="newTask.description"
+                  placeholder="Description (optional)"
+                  class="w-full p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-3 font-sans text-sm resize-none focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                  rows="3"
+                ></textarea>
+                <div class="flex gap-2">
+                  <button @click="handleAddTask" class="flex-1 p-3 border-none rounded-lg cursor-pointer font-medium transition-all bg-emerald-500 dark:bg-emerald-600 text-white hover:bg-emerald-600 dark:hover:bg-emerald-700">Save</button>
+                  <button @click="showAddForm = false" class="flex-1 p-3 border-none rounded-lg cursor-pointer font-medium transition-all bg-gray-200 dark:bg-gray-500 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-400">Cancel</button>
+                </div>
+              </div>
 
-.header-title h1 {
-  font-size: 1.875rem;
-  font-weight: 700;
-}
+              <!-- Tasks List -->
+              <div class="max-h-100 overflow-y-auto">
+                <div v-if="currentTasks.length === 0" class="text-center py-12 px-4 text-gray-500 dark:text-gray-400">
+                  <svg class="w-12 h-12 stroke-2 opacity-50 mb-2 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  <p>No tasks scheduled</p>
+                </div>
 
-.today-date {
-  font-size: 0.875rem;
-  opacity: 0.9;
-}
+                <div
+                  v-for="task in currentTasks"
+                  :key="task.id"
+                  :class="[
+                    'bg-white dark:bg-gray-600 p-4 rounded-lg mb-3 shadow-sm flex justify-between items-start transition-colors duration-300',
+                    { 'opacity-60': task.completed }
+                  ]"
+                >
+                  <div class="flex gap-3 flex-1">
+                    <button
+                      @click="toggleComplete(task.id)"
+                      :disabled="isDateDisabled(selectedDate)"
+                      :class="[
+                        'w-5 h-5 min-w-5 border-2 rounded flex items-center justify-center cursor-pointer transition-all mt-1',
+                        task.completed 
+                          ? 'bg-emerald-500 dark:bg-emerald-600 border-emerald-500 dark:border-emerald-600' 
+                          : 'bg-transparent border-gray-300 dark:border-gray-400 hover:border-emerald-500 dark:hover:border-emerald-400',
+                        { 'cursor-not-allowed': isDateDisabled(selectedDate) }
+                      ]"
+                    >
+                      <svg v-if="task.completed" class="w-3 h-3 stroke-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </button>
+                    <div class="flex-1">
+                      <div class="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-sm font-semibold mb-1">
+                        <svg class="w-4 h-4 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <circle cx="12" cy="12" r="10"/>
+                          <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <span>{{ task.time }}</span>
+                      </div>
+                      <h3 :class="['text-base font-semibold text-gray-800 dark:text-gray-100 mb-1', { 'line-through': task.completed }]">{{ task.title }}</h3>
+                      <p v-if="task.description" class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ task.description }}</p>
+                    </div>
+                  </div>
+                  <button
+                    v-if="!isDateDisabled(selectedDate)"
+                    @click="deleteTaskItem(task.id)"
+                    class="bg-transparent border-none p-1 text-red-500 dark:text-red-400 cursor-pointer rounded transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
+                  >
+                    <svg class="w-5 h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
 
-.content-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  padding: 1.5rem;
-}
+              <div v-if="isDateDisabled(selectedDate)" class="mt-4 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-800 dark:text-amber-300 transition-colors duration-300">
+                This date is in the past. Viewing only.
+              </div>
+            </div>
 
-@media (max-width: 768px) {
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-}
+            <div v-else class="flex flex-col items-center justify-center h-full min-h-100 text-gray-500 dark:text-gray-400 text-center">
+              <svg class="w-16 h-16 stroke-2 opacity-50 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <p>Select a date to view or add tasks</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
 
-.calendar-section, .detail-section {
-  min-height: 400px;
-}
-
-.calendar-card, .detail-card {
-  background: #F9FAFB;
-  border-radius: 1rem;
-  padding: 1rem;
-}
-
-.calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.calendar-header h2 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1F2937;
-}
-
-.nav-btn {
-  background: transparent;
-  border: none;
-  padding: 0.5rem;
-  cursor: pointer;
-  border-radius: 0.5rem;
-  transition: background 0.2s;
-}
-
-.nav-btn:hover {
-  background: #E5E7EB;
-}
-
-.weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.weekday {
-  text-align: center;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #6B7280;
-  padding: 0.5rem;
-}
-
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.5rem;
-}
-
-.day-cell {
-  aspect-ratio: 1;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border: none;
-  cursor: pointer;
-  background: white;
-  color: #374151;
-  transition: all 0.2s;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.day-cell:hover:not(:disabled) {
-  background: #E5E7EB;
-}
-
-.day-cell.disabled {
-  background: #F3F4F6;
-  color: #9CA3AF;
-  cursor: not-allowed;
-}
-
-.day-cell.today {
-  background: #E0E7FF;
-  color: #4338CA;
-  font-weight: 600;
-}
-
-.day-cell.selected {
-  background: #2563EB;
-  color: white;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-}
-
-.day-cell.has-tasks:not(.selected) {
-  background: #DBEAFE;
-  color: #1E40AF;
-}
-
-.task-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #2563EB;
-  margin-top: 2px;
-}
-
-.day-cell.selected .task-indicator {
-  background: white;
-}
-
-.detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.detail-header h2 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1F2937;
-}
-
-.add-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #2563EB;
-  color: white;
-  border: none;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background 0.2s;
-}
-
-.add-btn:hover {
-  background: #1D4ED8;
-}
-
-.add-form {
-  background: white;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  margin-bottom: 1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.input, .textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #D1D5DB;
-  border-radius: 0.5rem;
-  margin-bottom: 0.75rem;
-  font-family: inherit;
-  font-size: 0.875rem;
-}
-
-.input:focus, .textarea:focus {
-  outline: none;
-  border-color: #2563EB;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.form-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.btn-save, .btn-cancel {
-  flex: 1;
-  padding: 0.75rem;
-  border: none;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.btn-save {
-  background: #10B981;
-  color: white;
-}
-
-.btn-save:hover {
-  background: #059669;
-}
-
-.btn-cancel {
-  background: #E5E7EB;
-  color: #374151;
-}
-
-.btn-cancel:hover {
-  background: #D1D5DB;
-}
-
-.tasks-list {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: #6B7280;
-}
-
-.empty-detail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 400px;
-  color: #6B7280;
-  text-align: center;
-}
-
-.task-item {
-  background: white;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  margin-bottom: 0.75rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.task-item.completed {
-  opacity: 0.6;
-}
-
-.task-content {
-  display: flex;
-  gap: 0.75rem;
-  flex: 1;
-}
-
-.checkbox {
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  border: 2px solid #D1D5DB;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  margin-top: 4px;
-}
-
-.checkbox:hover:not(:disabled) {
-  border-color: #10B981;
-}
-
-.checkbox.checked {
-  background: #10B981;
-  border-color: #10B981;
-}
-
-.checkbox:disabled {
-  cursor: not-allowed;
-}
-
-.check-icon {
-  width: 12px;
-  height: 12px;
-  stroke-width: 3;
-}
-
-.task-details {
-  flex: 1;
-}
-
-.task-time {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  color: #6B7280;
-  font-size: 0.875rem;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-}
-
-.task-details h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1F2937;
-  margin-bottom: 0.25rem;
-}
-
-.line-through {
-  text-decoration: line-through;
-}
-
-.task-desc {
-  font-size: 0.875rem;
-  color: #6B7280;
-  margin-top: 0.25rem;
-}
-
-.delete-btn {
-  background: transparent;
-  border: none;
-  padding: 0.25rem;
-  color: #EF4444;
-  cursor: pointer;
-  border-radius: 0.25rem;
-  transition: background 0.2s;
-}
-
-.delete-btn:hover {
-  background: #FEE2E2;
-}
-
-.warning {
-  margin-top: 1rem;
-  padding: 0.75rem;
-  background: #FEF3C7;
-  border: 1px solid #FDE68A;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  color: #92400E;
-}
-
-.icon {
-  width: 20px;
-  height: 20px;
-  stroke-width: 2;
-}
-
-.icon-sm {
-  width: 16px;
-  height: 16px;
-  stroke-width: 2;
-}
-
-.icon-lg {
-  width: 32px;
-  height: 32px;
-  stroke-width: 2;
-}
-
-.icon-xl {
-  width: 48px;
-  height: 48px;
-  stroke-width: 2;
-  opacity: 0.5;
-  margin-bottom: 0.5rem;
-}
-
-.icon-xxl {
-  width: 64px;
-  height: 64px;
-  stroke-width: 2;
-  opacity: 0.5;
-  margin-bottom: 1rem;
-}
-</style>
