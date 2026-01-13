@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     Darkmode: typeof import('./src/components/darkmode.vue')['default']
+    Google: typeof import('./src/components/google.vue')['default']
     Headers: typeof import('./src/components/headers.vue')['default']
     Navbar: typeof import('./src/components/navbar.vue')['default']
   }
