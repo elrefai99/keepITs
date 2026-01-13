@@ -1,2 +1,9 @@
-[build.environment]
-PNPM_FLAGS = "--no-frozen-lockfile"
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
