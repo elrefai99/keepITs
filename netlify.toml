@@ -1,16 +1,2 @@
-# netlify.toml
-[build]
-  command = "pnpm run build"
-  publish = "dist"
-
 [build.environment]
-  PNPM_FLAGS = "--no-frozen-lockfile"
-
-[context.production.environment]
-  VITE_FIREBASE_API_KEY=AIzaSyCvLo_ct6hpT-9YtNwsOsl8jQhrG7AG5-k
-  VITE_FIREBASE_AUTH_DOMAIN=schedule-5bf3f.firebaseapp.com
-  VITE_FIREBASE_PROJECT_ID=schedule-5bf3f
-  VITE_FIREBASE_STORAGE_BUCKET=schedule-5bf3f.firebasestorage.app
-  VITE_FIREBASE_MESSAGING_SENDER_ID=873645947107
-  VITE_FIREBASE_APP_ID=1:873645947107:web:41f15f2d0f3671c1f26dd6
-  VITE_FIREBASE_MEASUREMENT_ID=G-2ZES5ZER8R
+PNPM_FLAGS = "--no-frozen-lockfile"
