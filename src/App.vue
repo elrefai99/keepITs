@@ -17,12 +17,16 @@ export default {
     
     const currentDate: any = ref(new Date())
     const selectedDate: any = ref<Date | null>(null)
+    const calendarView = ref<'day' | 'week' | 'month'>('month')
     const showAddForm: any = ref(false)
     const newTask: any = ref({
       title: '',
       time: '09:00',
       description: '',
-      completed: false
+      completed: false,
+      meetingType: 'none',
+      meetingUrl: '',
+      guestEmailsText: ''
     })
     
     // Timer state
@@ -90,10 +94,59 @@ export default {
       }
       return days
     })
+
+    const getWeekStart = (date: Date) => {
+      const d = new Date(date)
+      const day = d.getDay()
+      d.setDate(d.getDate() - day)
+      d.setHours(0, 0, 0, 0)
+      return d
+    }
+
+    const weekCalendarDays = computed(() => {
+      const base = selectedDate.value || today
+      const start = getWeekStart(base)
+      const days: (Date | null)[] = []
+      for (let i = 0; i < 7; i++) {
+        const current = new Date(start)
+        current.setDate(start.getDate() + i)
+        days.push(current)
+      }
+      return days
+    })
+
+    const dayCalendarDays = computed(() => {
+      if (!selectedDate.value) return []
+      return [selectedDate.value]
+    })
+
+    const displayedCalendarDays = computed(() => {
+      if (calendarView.value === 'month') return calendarDays.value
+      if (calendarView.value === 'week') return weekCalendarDays.value
+      if (calendarView.value === 'day') return dayCalendarDays.value
+      return calendarDays.value
+    })
     
     const monthName = computed(() => monthNames[currentDate.value.getMonth()])
     const currentYear = computed(() => currentDate.value.getFullYear())
     const todayFormatted = computed(() => formatDate(today))
+
+    const calendarTitle = computed(() => {
+      if (calendarView.value === 'month') {
+        return `${monthName.value} ${currentYear.value}`
+      }
+
+      if (calendarView.value === 'week') {
+        const base = selectedDate.value || today
+        const start = getWeekStart(base)
+        const end = new Date(start)
+        end.setDate(start.getDate() + 6)
+        return `Week ${formatDate(start)} - ${formatDate(end)}`
+      }
+
+      const base = selectedDate.value || today
+      return `Day ${formatDate(base)}`
+    })
     
     const currentTasks = computed(() => {
       if (!selectedDate.value) return []
@@ -186,6 +239,104 @@ export default {
       const dateKey = formatDate(date)
       return store.getTasksForDate(dateKey).length
     }
+
+    const getMeetingCountForDate = (date: Date) => {
+      const dateKey = formatDate(date)
+      return store.getTasksForDate(dateKey).filter(task => task.meetingUrl).length
+    }
+
+    const getTasksForDay = (date: Date) => {
+      const dateKey = formatDate(date)
+      return store.getTasksForDate(dateKey).slice().sort((a, b) => a.time.localeCompare(b.time))
+    }
+
+    // Time slots for Google Calendar-style views (6 AM to 11 PM)
+    const timeSlots = computed(() => {
+      const slots = []
+      for (let hour = 6; hour <= 23; hour++) {
+        slots.push(hour)
+      }
+      return slots
+    })
+
+    // Format hour for display
+    const formatHour = (hour: number) => {
+      if (hour === 0) return '12 AM'
+      if (hour < 12) return `${hour} AM`
+      if (hour === 12) return '12 PM'
+      return `${hour - 12} PM`
+    }
+
+    // Calculate task position and height based on time
+    const getTaskPosition = (timeStr: string) => {
+      const [hourStr, minuteStr] = timeStr.split(':')
+      const hour = parseInt(hourStr) || 0
+      const minute = parseInt(minuteStr) || 0
+      
+      // Start from 6 AM (hour 6)
+      const startHour = 6
+      if (hour < startHour) return { top: 0, height: 60, display: false }
+      
+      // Calculate position: each hour = 60px, each minute = 1px
+      const top = ((hour - startHour) * 60) + minute
+      // Default height: 60px (1 hour), can be adjusted
+      const height = 60
+      
+      return { top, height, display: true }
+    }
+
+    // Get tasks for a specific day and time slot
+    const getTasksForDayAndHour = (date: Date, hour: number) => {
+      const dateKey = formatDate(date)
+      const tasks = store.getTasksForDate(dateKey)
+      return tasks.filter(task => {
+        const [taskHour] = task.time.split(':')
+        return parseInt(taskHour) === hour
+      }).sort((a, b) => a.time.localeCompare(b.time))
+    }
+
+    const openGoogleCalendarForTask = () => {
+      if (!selectedDate.value) return
+
+      const title = newTask.value.title || 'Meeting'
+
+      const descriptionParts: string[] = []
+      if (newTask.value.description) descriptionParts.push(newTask.value.description)
+      if (newTask.value.meetingUrl) descriptionParts.push(`Meeting link: ${newTask.value.meetingUrl}`)
+      const details = descriptionParts.join('\\n\\n')
+
+      const [hourStr, minuteStr] = (newTask.value.time || '09:00').split(':')
+      const hour = Number(hourStr) || 9
+      const minute = Number(minuteStr) || 0
+
+      const start = new Date(selectedDate.value)
+      start.setHours(hour, minute, 0, 0)
+      const end = new Date(start)
+      end.setMinutes(start.getMinutes() + 30)
+
+      const formatForGoogle = (d: Date) => {
+        const pad = (n: number) => String(n).padStart(2, '0')
+        return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`
+      }
+
+      const datesParam = `${formatForGoogle(start)}/${formatForGoogle(end)}`
+
+      const guests = (newTask.value.guestEmailsText || '')
+        .split(/[,;]+/)
+        .map((e: string) => e.trim())
+        .filter((e: string) => e.length > 0)
+
+      const baseUrl = 'https://calendar.google.com/calendar/u/0/r/eventedit'
+      const params = new URLSearchParams()
+      params.set('text', title)
+      params.set('dates', datesParam)
+      if (details) params.set('details', details)
+      if (guests.length) params.set('add', guests.join(','))
+      if (newTask.value.meetingUrl) params.set('location', newTask.value.meetingUrl)
+
+      const url = `${baseUrl}?${params.toString()}`
+      window.open(url, '_blank')
+    }
     
     const getDayClass = (day: Date) => {
       if (!day) return ''
@@ -205,11 +356,28 @@ export default {
     }
     
     const changeMonth = (delta: number) => {
-      currentDate.value = new Date(
-        currentDate.value.getFullYear(),
-        currentDate.value.getMonth() + delta,
-        1
-      )
+      if (calendarView.value === 'month') {
+        currentDate.value = new Date(
+          currentDate.value.getFullYear(),
+          currentDate.value.getMonth() + delta,
+          1
+        )
+        return
+      }
+
+      // For week/day views, move the selected date
+      const base = selectedDate.value || today
+      const newDate = new Date(base)
+
+      if (calendarView.value === 'week') {
+        newDate.setDate(newDate.getDate() + delta * 7)
+      } else {
+        // day view
+        newDate.setDate(newDate.getDate() + delta)
+      }
+
+      selectedDate.value = newDate
+      currentDate.value = newDate
     }
     
     const handleDateClick = (date: Date) => {
@@ -222,13 +390,25 @@ export default {
       if (!newTask.value.title || !selectedDate.value) return
       
       const dateKey = formatDate(selectedDate.value)
-      store.addTask(dateKey, { ...newTask.value })
+
+      const guests = (newTask.value.guestEmailsText || '')
+        .split(/[,;]+/)
+        .map((e: string) => e.trim())
+        .filter((e: string) => e.length > 0)
+
+      store.addTask(dateKey, {
+        ...newTask.value,
+        guestEmails: guests
+      })
       
       newTask.value = {
         title: '',
         time: '09:00',
         description: '',
-        completed: false
+        completed: false,
+        meetingType: 'none',
+        meetingUrl: '',
+        guestEmailsText: ''
       }
       showAddForm.value = false
     }
@@ -326,10 +506,14 @@ export default {
     return {
       currentDate,
       selectedDate,
+      calendarView,
       showAddForm,
       newTask,
       weekDays,
       calendarDays,
+      weekCalendarDays,
+      displayedCalendarDays,
+      calendarTitle,
       monthName,
       currentYear,
       todayFormatted,
@@ -338,12 +522,20 @@ export default {
       isDateDisabled,
       hasTasksOnDate,
       getTaskCountForDate,
+      getMeetingCountForDate,
+      getTasksForDay,
+      openGoogleCalendarForTask,
       getDayClass,
       changeMonth,
       handleDateClick,
       handleAddTask,
       toggleComplete,
       deleteTaskItem,
+      // Google Calendar style views
+      timeSlots,
+      formatHour,
+      getTaskPosition,
+      getTasksForDayAndHour,
       // Timer
       currentTime,
       currentTimeFormatted,
@@ -457,50 +649,288 @@ export default {
           <!-- Calendar View -->
           <div>
             <div bg-gray-50 dark:bg-gray-700 rounded-xl sm:rounded-2xl p-2 sm:p-3 md:p-4 transition-colors duration-300>
-              <div flex justify-between items-center mb-2 sm:mb-3 md:mb-4>
-                <button @click="changeMonth(-1)" class="bg-transparent border-none p-1 sm:p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600">
-                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <polyline points="15 18 9 12 15 6"/>
-                  </svg>
-                </button>
-                <h2 class="text-base sm:text-lg md:text-xl font-bold text-gray-800 dark:text-gray-100">{{ monthName }} {{ currentYear }}</h2>
-                <button @click="changeMonth(1)" class="bg-transparent border-none p-1 sm:p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600">
-                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
-                </button>
-              </div>
-
-              <div grid grid-cols-7 gap-1 sm:gap-2 mb-1 sm:mb-2>
-                <div v-for="day in weekDays" :key="day" class="text-center text-xs sm:text-sm font-semibold text-gray-500 dark:text-gray-400 p-1 sm:p-2">{{ day }}</div>
-              </div>
-
-              <div grid grid-cols-7 gap-1 sm:gap-2>
-                <button
-                  v-for="(day, index) in calendarDays"
-                  :key="index"
-                  @click="day && handleDateClick(day)"
-                  :disabled="!day"
-                  :class="[
-                    'aspect-square p-1 sm:p-1.5 md:p-2 rounded-md sm:rounded-lg text-xs sm:text-sm font-medium border-none cursor-pointer bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-200 transition-all relative flex flex-col items-center justify-center',
-                    {
-                      'hover:bg-gray-200 dark:hover:bg-gray-500': day && !isDateDisabled(day),
-                      'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500': day && isDateDisabled(day),
-                      'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold': day && formatDate(day) === todayFormatted && !(selectedDate && formatDate(day) === formatDate(selectedDate)),
-                      'bg-blue-600 dark:bg-blue-500 text-white shadow-lg shadow-blue-600/40 dark:shadow-blue-500/40': selectedDate && day && formatDate(day) === formatDate(selectedDate),
-                      'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200': day && hasTasksOnDate(day) && !(selectedDate && formatDate(day) === formatDate(selectedDate))
-                    }
-                  ]"
-                >
-                  <span v-if="day" class="text-xs sm:text-sm">{{ day.getDate() }}</span>
-                  <span
-                    v-if="day && getTaskCountForDate(day)"
-                    class="mt-0.5 text-[8px] sm:text-[9px] md:text-[10px] font-semibold text-blue-700 dark:text-blue-300 leading-tight"
+              <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 mb-2 sm:mb-3 md:mb-4">
+                <div class="flex gap-1 sm:gap-2 w-full sm:w-auto">
+                  <button
+                    @click="calendarView = 'day'"
+                    :class="[
+                      'flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-1 rounded-md text-[10px] sm:text-xs md:text-sm border border-transparent transition-colors font-medium',
+                      calendarView === 'day'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-transparent text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+                    ]"
                   >
-                    {{ getTaskCountForDate(day) }}<span class="hidden sm:inline"> task</span><span v-if="getTaskCountForDate(day) > 1" class="hidden sm:inline">s</span>
-                  </span>
-                </button>
+                    Day
+                  </button>
+                  <button
+                    @click="calendarView = 'week'"
+                    :class="[
+                      'flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-1 rounded-md text-[10px] sm:text-xs md:text-sm border border-transparent transition-colors font-medium',
+                      calendarView === 'week'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-transparent text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+                    ]"
+                  >
+                    Week
+                  </button>
+                  <button
+                    @click="calendarView = 'month'"
+                    :class="[
+                      'flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-1 rounded-md text-[10px] sm:text-xs md:text-sm border border-transparent transition-colors font-medium',
+                      calendarView === 'month'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-transparent text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
+                    ]"
+                  >
+                    Month
+                  </button>
+                </div>
+                <div class="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-between sm:justify-start">
+                  <button @click="changeMonth(-1)" class="bg-transparent border-none p-1.5 sm:p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 flex-shrink-0">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                  </button>
+                  <h2 class="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-gray-800 dark:text-gray-100 text-center flex-1 sm:flex-none min-w-0 truncate sm:min-w-fit">
+                    {{ calendarTitle }}
+                  </h2>
+                  <button @click="changeMonth(1)" class="bg-transparent border-none p-1.5 sm:p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 flex-shrink-0">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
+
+              <!-- Month View -->
+              <template v-if="calendarView === 'month'">
+                <div class="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-2 mb-1 sm:mb-2">
+                  <div v-for="day in weekDays" :key="day" class="text-center text-[10px] sm:text-xs md:text-sm font-semibold text-gray-500 dark:text-gray-400 p-1 sm:p-1.5 md:p-2">{{ day }}</div>
+                </div>
+
+                <div class="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-2">
+                  <button
+                    v-for="(day, index) in displayedCalendarDays"
+                    :key="index"
+                    @click="day && handleDateClick(day)"
+                    :disabled="!day"
+                    :class="[
+                      'min-h-12 sm:min-h-14 md:min-h-16 lg:min-h-20 p-1 sm:p-1.5 md:p-2 rounded-none text-[10px] sm:text-xs md:text-sm font-medium cursor-pointer bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 transition-all relative flex flex-col items-start justify-start border border-gray-200 dark:border-gray-600',
+                      {
+                        'hover:bg-gray-50 dark:hover:bg-gray-600': day && !isDateDisabled(day),
+                        'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500': day && isDateDisabled(day),
+                        'ring-1 ring-blue-500 dark:ring-blue-400': selectedDate && day && formatDate(day) === formatDate(selectedDate),
+                        'bg-blue-50/60 dark:bg-blue-900/40': selectedDate && day && formatDate(day) === formatDate(selectedDate),
+                        'bg-blue-50 dark:bg-blue-900/30': day && !isDateDisabled(day) && formatDate(day) === todayFormatted && !(selectedDate && formatDate(day) === formatDate(selectedDate))
+                      }
+                    ]"
+                  >
+                    <template v-if="day">
+                      <div class="flex items-center justify-between w-full">
+                        <span
+                          :class="[
+                            'text-[10px] sm:text-xs md:text-sm font-semibold',
+                            formatDate(day) === todayFormatted
+                              ? 'text-blue-600 dark:text-blue-300'
+                              : 'text-gray-700 dark:text-gray-200'
+                          ]"
+                        >
+                          {{ day.getDate() }}
+                        </span>
+                        <span
+                          v-if="getTaskCountForDate(day)"
+                          class="ml-auto px-1 sm:px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-800 text-[8px] sm:text-[9px] md:text-[10px] font-semibold text-blue-700 dark:text-blue-200"
+                        >
+                          {{ getTaskCountForDate(day) }}
+                        </span>
+                      </div>
+
+                      <div
+                        v-if="getTaskCountForDate(day)"
+                        class="mt-0.5 sm:mt-1 text-[8px] sm:text-[9px] md:text-[10px] lg:text-[11px] font-medium text-gray-500 dark:text-gray-300 truncate w-full flex items-center gap-0.5 sm:gap-1"
+                      >
+                        <span>
+                          {{ getTaskCountForDate(day) }}<span class="hidden sm:inline"> task</span><span v-if="getTaskCountForDate(day) > 1" class="hidden sm:inline">s</span>
+                        </span>
+                        <span
+                          v-if="getMeetingCountForDate(day)"
+                          class="text-blue-600 dark:text-blue-300"
+                        >
+                          <span class="hidden sm:inline">· </span>{{ getMeetingCountForDate(day) }}<span class="hidden sm:inline"> meeting</span><span v-if="getMeetingCountForDate(day) > 1" class="hidden sm:inline">s</span>
+                        </span>
+                      </div>
+                    </template>
+                  </button>
+                </div>
+              </template>
+
+              <!-- Week View - Google Calendar Style -->
+              <template v-else-if="calendarView === 'week'">
+                <div class="flex border-b border-gray-200 dark:border-gray-600 overflow-x-auto">
+                  <div class="w-12 sm:w-16 md:w-20 flex-shrink-0"></div>
+                  <div class="flex-1 grid grid-cols-7 min-w-[700px] sm:min-w-0 border-l border-gray-200 dark:border-gray-600">
+                    <template
+                      v-for="(day, index) in weekCalendarDays"
+                      :key="index"
+                    >
+                      <div
+                        v-if="day"
+                        @click="handleDateClick(day)"
+                        :class="[
+                          'p-1.5 sm:p-2 md:p-3 text-center border-r border-gray-200 dark:border-gray-600 cursor-pointer transition-colors',
+                          formatDate(day) === todayFormatted
+                            ? 'bg-blue-50 dark:bg-blue-900/30'
+                            : 'bg-white dark:bg-gray-700',
+                          selectedDate && formatDate(day) === formatDate(selectedDate)
+                            ? 'ring-2 ring-blue-500 dark:ring-blue-400'
+                            : ''
+                        ]"
+                      >
+                        <div class="text-[10px] sm:text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400 mb-0.5 sm:mb-1">
+                          {{ weekDays[day.getDay()] }}
+                        </div>
+                        <div
+                          :class="[
+                            'text-sm sm:text-base md:text-lg font-semibold',
+                            formatDate(day) === todayFormatted
+                              ? 'text-blue-600 dark:text-blue-300'
+                              : 'text-gray-800 dark:text-gray-200'
+                          ]"
+                        >
+                          {{ day.getDate() }}
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="flex overflow-x-auto">
+                  <div class="w-12 sm:w-16 md:w-20 flex-shrink-0">
+                    <div
+                      v-for="hour in timeSlots"
+                      :key="hour"
+                      class="h-12 sm:h-14 md:h-16 border-b border-gray-100 dark:border-gray-700 relative"
+                    >
+                      <div class="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 -mt-2.5 sm:-mt-3 pr-1 sm:pr-2 text-right">
+                        {{ formatHour(hour) }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex-1 grid grid-cols-7 min-w-[700px] sm:min-w-0 border-l border-gray-200 dark:border-gray-600">
+                    <template
+                      v-for="(day, dayIndex) in weekCalendarDays"
+                      :key="dayIndex"
+                    >
+                      <div
+                        v-if="day"
+                        class="relative border-r border-gray-200 dark:border-gray-600"
+                      >
+                        <div
+                          v-for="hour in timeSlots"
+                          :key="hour"
+                          @click="handleDateClick(day)"
+                          class="h-12 sm:h-14 md:h-16 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600/50 cursor-pointer transition-colors relative"
+                        >
+                          <div
+                            v-for="task in getTasksForDayAndHour(day, hour)"
+                            :key="task.id"
+                            :style="{
+                              top: `${getTaskPosition(task.time).top % 60}px`,
+                              height: `${getTaskPosition(task.time).height}px`
+                            }"
+                            :class="[
+                              'absolute left-0.5 right-0.5 rounded px-1 sm:px-1.5 md:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] md:text-xs font-medium cursor-pointer z-10 overflow-hidden',
+                              task.meetingUrl
+                                ? 'bg-blue-500 dark:bg-blue-600 text-white'
+                                : 'bg-indigo-100 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200'
+                            ]"
+                            @click.stop="handleDateClick(day)"
+                          >
+                            <div class="font-semibold truncate">{{ task.time }}</div>
+                            <div class="truncate hidden sm:block">{{ task.title }}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Day View - Google Calendar Style -->
+              <template v-else-if="calendarView === 'day'">
+                <div v-if="selectedDate" class="flex border-b border-gray-200 dark:border-gray-600">
+                  <div class="w-12 sm:w-16 md:w-20 flex-shrink-0"></div>
+                  <div
+                    class="flex-1 p-2 sm:p-3 text-center border-l border-gray-200 dark:border-gray-600"
+                    :class="[
+                      formatDate(selectedDate) === todayFormatted
+                        ? 'bg-blue-50 dark:bg-blue-900/30'
+                        : 'bg-white dark:bg-gray-700'
+                    ]"
+                  >
+                    <div class="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                      {{ weekDays[selectedDate.getDay()] }}
+                    </div>
+                    <div
+                      :class="[
+                        'text-base sm:text-lg font-semibold',
+                        formatDate(selectedDate) === todayFormatted
+                          ? 'text-blue-600 dark:text-blue-300'
+                          : 'text-gray-800 dark:text-gray-200'
+                      ]"
+                    >
+                      {{ selectedDate.getDate() }}
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="selectedDate" class="flex overflow-x-auto">
+                  <div class="w-12 sm:w-16 md:w-20 flex-shrink-0">
+                    <div
+                      v-for="hour in timeSlots"
+                      :key="hour"
+                      class="h-12 sm:h-14 md:h-16 border-b border-gray-100 dark:border-gray-700 relative"
+                    >
+                      <div class="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 -mt-2.5 sm:-mt-3 pr-1 sm:pr-2 text-right">
+                        {{ formatHour(hour) }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex-1 border-l border-gray-200 dark:border-gray-600 relative min-w-0">
+                    <div
+                      v-for="hour in timeSlots"
+                      :key="hour"
+                      @click="handleDateClick(selectedDate)"
+                      class="h-12 sm:h-14 md:h-16 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600/50 cursor-pointer transition-colors relative"
+                    >
+                      <div
+                        v-for="task in getTasksForDayAndHour(selectedDate, hour)"
+                        :key="task.id"
+                        :style="{
+                          top: `${getTaskPosition(task.time).top % 60}px`,
+                          height: `${getTaskPosition(task.time).height}px`
+                        }"
+                        :class="[
+                          'absolute left-1 right-1 rounded px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium cursor-pointer z-10 overflow-hidden shadow-sm',
+                          task.meetingUrl
+                            ? 'bg-blue-500 dark:bg-blue-600 text-white'
+                            : 'bg-indigo-100 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200'
+                        ]"
+                        @click.stop="handleDateClick(selectedDate)"
+                      >
+                        <div class="font-semibold truncate">{{ task.time }}</div>
+                        <div class="truncate">{{ task.title }}</div>
+                        <div v-if="task.description" class="text-[9px] sm:text-[10px] opacity-75 truncate mt-0.5 hidden sm:block">
+                          {{ task.description }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="flex items-center justify-center py-8 sm:py-12 text-gray-500 dark:text-gray-400">
+                  <p class="text-xs sm:text-sm">Select a date to view</p>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -591,6 +1021,34 @@ export default {
                       </div>
                       <h3 :class="['text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 mb-1 break-words', { 'line-through': task.completed }]">{{ task.title }}</h3>
                       <p v-if="task.description" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 break-words">{{ task.description }}</p>
+
+                      <div v-if="task.meetingUrl" class="mt-2 flex items-center gap-2">
+                        <span
+                          v-if="task.meetingType === 'google'"
+                          class="px-1.5 py-0.5 rounded-full bg-green-100 text-[10px] sm:text-xs font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-200"
+                        >
+                          Google Meet
+                        </span>
+                        <span
+                          v-else-if="task.meetingType === 'teams'"
+                          class="px-1.5 py-0.5 rounded-full bg-purple-100 text-[10px] sm:text-xs font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200"
+                        >
+                          Microsoft Teams
+                        </span>
+                        <a
+                          :href="task.meetingUrl"
+                          target="_blank"
+                          rel="noreferrer"
+                          class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600 text-white text-[10px] sm:text-xs font-medium hover:bg-blue-700"
+                        >
+                          <svg class="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M14 3h7v7"/>
+                            <path d="M10 14L21 3"/>
+                            <path d="M5 5v14h14"/>
+                          </svg>
+                          Join meeting
+                        </a>
+                      </div>
                     </div>
                   </div>
                   <button
@@ -629,17 +1087,17 @@ export default {
   <!-- Add Task Modal -->
   <div
     v-if="showAddForm && selectedDate && !isDateDisabled(selectedDate)"
-    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
     @click.self="showAddForm = false"
   >
-    <div class="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
-      <div class="flex justify-between items-center mb-3 sm:mb-4">
-        <h3 class="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-100">
+    <div class="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl md:rounded-2xl shadow-2xl w-full max-w-md p-3 sm:p-4 md:p-6 max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-2 sm:mb-3 md:mb-4">
+        <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800 dark:text-gray-100 pr-2">
           Add Task – {{ formatDate(selectedDate) }}
         </h3>
         <button
           @click="showAddForm = false"
-          class="bg-transparent border-none text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer text-xl sm:text-2xl leading-none"
+          class="bg-transparent border-none text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer text-lg sm:text-xl md:text-2xl leading-none flex-shrink-0"
         >
           ✕
         </button>
@@ -663,6 +1121,51 @@ export default {
           class="w-full p-2.5 sm:p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-2 sm:mb-3 font-sans text-sm resize-none focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
           rows="3"
         ></textarea>
+        <div class="mb-2 sm:mb-3">
+          <label class="block text-xs sm:text-sm font-medium text-gray-200 mb-1">Meeting</label>
+          <div class="flex flex-col gap-2">
+            <select
+              v-model="newTask.meetingType"
+              class="w-full p-2.5 sm:p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors"
+            >
+              <option value="none">No meeting</option>
+              <option value="google">Google Meet</option>
+              <option value="teams">Microsoft Teams</option>
+              <option value="custom">Other link</option>
+            </select>
+            <input
+              v-if="newTask.meetingType !== 'none'"
+              v-model="newTask.meetingUrl"
+              type="url"
+              placeholder="Paste meeting link (e.g. Google Meet or Teams)"
+              class="w-full p-2.5 sm:p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
+            />
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
+              <input
+                v-model="newTask.guestEmailsText"
+                type="text"
+                placeholder="Guest emails (comma separated)"
+                class="w-full sm:flex-1 p-2.5 sm:p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-[10px] sm:text-xs focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              />
+              <button
+                type="button"
+                @click="openGoogleCalendarForTask"
+                class="px-2.5 sm:px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] sm:text-xs font-medium border-none cursor-pointer flex items-center gap-1"
+              >
+                <svg class="w-3.5 h-3.5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                Google Calendar
+              </button>
+            </div>
+            <p class="mt-1 text-[10px] sm:text-xs text-gray-400">
+              This opens Google Calendar with this meeting pre-filled so you can send email invites.
+            </p>
+          </div>
+        </div>
         <div class="flex gap-2 mt-2">
           <button @click="handleAddTask" class="flex-1 p-2.5 sm:p-3 border-none rounded-lg cursor-pointer text-sm sm:text-base font-medium transition-all bg-emerald-500 dark:bg-emerald-600 text-white hover:bg-emerald-600 dark:hover:bg-emerald-700">
             Save
