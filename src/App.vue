@@ -181,6 +181,11 @@ export default {
       const dateKey = formatDate(date)
       return store.getTasksForDate(dateKey).length > 0
     }
+
+    const getTaskCountForDate = (date: Date) => {
+      const dateKey = formatDate(date)
+      return store.getTasksForDate(dateKey).length
+    }
     
     const getDayClass = (day: Date) => {
       if (!day) return ''
@@ -332,6 +337,7 @@ export default {
       formatDate,
       isDateDisabled,
       hasTasksOnDate,
+      getTaskCountForDate,
       getDayClass,
       changeMonth,
       handleDateClick,
@@ -362,121 +368,121 @@ export default {
 
 <template>
   <navbar />
-  <div min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4 font-sans transition-colors duration-300>
+  <div min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-2 sm:p-4 font-sans transition-colors duration-300>
     <div max-w-6xl mx-auto>
-      <div bg-white dark:bg-gray-800 rounded-3xl shadow-2xl overflow-hidden transition-colors duration-300 class="dark:shadow-gray-900/50">
+      <div bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden transition-colors duration-300 class="dark:shadow-gray-900/50">
         <!-- Header -->
-        <div bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-800 p-6 text-white transition-colors duration-300>
-          <div flex justify-between items-center flex-wrap gap-4>
-            <div flex items-center gap-3>
-              <svg class="w-8 h-8 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <div bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-800 p-3 sm:p-4 md:p-6 text-white transition-colors duration-300>
+          <div flex justify-between items-center flex-wrap gap-2 sm:gap-4>
+            <div flex items-center gap-2 sm:gap-3>
+              <svg class="w-6 h-6 sm:w-8 sm:h-8 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
                 <line x1="16" y1="2" x2="16" y2="6"/>
                 <line x1="8" y1="2" x2="8" y2="6"/>
                 <line x1="3" y1="10" x2="21" y2="10"/>
               </svg>
-              <h1 text-3xl font-bold>Schedule Manager</h1>
+              <h1 class="text-xl sm:text-2xl md:text-3xl font-bold">Schedule Manager</h1>
             </div>
-            <div flex flex-col items-end gap-2>
-              <div text-sm opacity-90>Today: {{ todayFormatted }}</div>
-              <div text-lg font-semibold>{{ currentTimeFormatted }}</div>
+            <div flex flex-col items-end gap-1 sm:gap-2>
+              <div class="text-xs sm:text-sm opacity-90">Today: {{ todayFormatted }}</div>
+              <div class="text-sm sm:text-lg font-semibold">Time: {{ currentTimeFormatted }}</div>
             </div>
           </div>
           
           <!-- Pomodoro Timer -->
-          <div class="bg-white/10" mt-6  backdrop-blur-sm rounded-2xl p-4>
-            <div flex items-center justify-between flex-wrap gap-4>
-              <div flex items-center gap-3>
-                <svg class="w-6 h-6 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <div class="bg-white/10 mt-3 sm:mt-4 md:mt-6 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4">
+            <div flex items-center justify-between flex-wrap gap-2 sm:gap-4>
+              <div flex items-center gap-2 sm:gap-3>
+                <svg class="w-5 h-5 sm:w-6 sm:h-6 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <circle cx="12" cy="12" r="10"/>
                   <polyline points="12 6 12 12 16 14"/>
                 </svg>
                 <div>
-                  <div text-xs opacity-75>{{ isBreakTime ? 'Break Time' : 'Focus Time' }}</div>
-                  <div text-3xl font-bold font-mono>{{ timerDisplay }}</div>
+                  <div class="text-[10px] sm:text-xs opacity-75">{{ isBreakTime ? 'Break Time' : 'Focus Time' }}</div>
+                  <div class="text-2xl sm:text-3xl font-bold font-mono">{{ timerDisplay }}</div>
                 </div>
               </div>
-              <div flex gap-2>
+              <div flex gap-1 sm:gap-2>
                 <button 
                   v-if="!isTimerRunning"
                   @click="startTimer"
-                  class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  class="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center gap-1 sm:gap-2"
                 >
-                  <svg class="w-5 h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <polygon points="5 3 19 12 5 21 5 3"/>
                   </svg>
-                  Start
+                  <span class="hidden sm:inline">Start</span>
                 </button>
                 <button 
                   v-if="isTimerRunning"
                   @click="pauseTimer"
-                  class="px-4 py-2 bg-amber-500 hover:bg-amber-600 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  class="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-amber-500 hover:bg-amber-600 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center gap-1 sm:gap-2"
                 >
-                  <svg class="w-5 h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <rect x="6" y="4" width="4" height="16"/>
                     <rect x="14" y="4" width="4" height="16"/>
                   </svg>
-                  Pause
+                  <span class="hidden sm:inline">Pause</span>
                 </button>
                 <button 
                   @click="resetTimer"
-                  class="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  class="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center gap-1 sm:gap-2"
                 >
-                  <svg class="w-5 h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <polyline points="1 4 1 10 7 10"/>
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
                   </svg>
-                  Reset
+                  <span class="hidden sm:inline">Reset</span>
                 </button>
               </div>
             </div>
             
             <!-- Next Task Preview -->
-            <div v-if="currentActiveTask || nextTask" class="mt-3 pt-3 border-t border-white/20">
-              <div v-if="currentActiveTask" class="flex items-center gap-2 text-sm mb-2">
-                <span class="px-2 py-1 bg-emerald-500/80 rounded text-white font-semibold text-xs">ACTIVE</span>
-                <span class="opacity-90">{{ currentActiveTask.time }}</span>
-                <span class="font-medium">{{ currentActiveTask.title }}</span>
+            <div v-if="currentActiveTask || nextTask" class="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-white/20">
+              <div v-if="currentActiveTask" class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm mb-1 sm:mb-2">
+                <span class="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-emerald-500/80 rounded text-white font-semibold text-[10px] sm:text-xs">ACTIVE</span>
+                <span class="opacity-90 truncate">{{ currentActiveTask.time }}</span>
+                <span class="font-medium truncate">{{ currentActiveTask.title }}</span>
               </div>
-              <div v-if="nextTask" class="flex items-center gap-2 text-sm">
-                <span class="px-2 py-1 bg-blue-500/80 rounded text-white font-semibold text-xs">NEXT</span>
-                <span class="opacity-90">{{ nextTask.time }}</span>
-                <span class="font-medium">{{ nextTask.title }}</span>
+              <div v-if="nextTask" class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <span class="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-500/80 rounded text-white font-semibold text-[10px] sm:text-xs">NEXT</span>
+                <span class="opacity-90 truncate">{{ nextTask.time }}</span>
+                <span class="font-medium truncate">{{ nextTask.title }}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div grid grid-cols-1 md:grid-cols-2 gap-6 p-6>
+        <div p-3 sm:p-4 md:p-6>
           <!-- Calendar View -->
-          <div min-h-100>
-            <div bg-gray-50 dark:bg-gray-700 rounded-2xl p-4 transition-colors duration-300>
-              <div flex justify-between items-center mb-4>
-                <button @click="changeMonth(-1)" class="bg-transparent border-none p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600">
-                  <svg class="w-5 h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <div>
+            <div bg-gray-50 dark:bg-gray-700 rounded-xl sm:rounded-2xl p-2 sm:p-3 md:p-4 transition-colors duration-300>
+              <div flex justify-between items-center mb-2 sm:mb-3 md:mb-4>
+                <button @click="changeMonth(-1)" class="bg-transparent border-none p-1 sm:p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600">
+                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <polyline points="15 18 9 12 15 6"/>
                   </svg>
                 </button>
-                <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{{ monthName }} {{ currentYear }}</h2>
-                <button @click="changeMonth(1)" class="bg-transparent border-none p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600">
-                  <svg class="w-5 h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <h2 class="text-base sm:text-lg md:text-xl font-bold text-gray-800 dark:text-gray-100">{{ monthName }} {{ currentYear }}</h2>
+                <button @click="changeMonth(1)" class="bg-transparent border-none p-1 sm:p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600">
+                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <polyline points="9 18 15 12 9 6"/>
                   </svg>
                 </button>
               </div>
 
-              <div grid grid-cols-7 gap-2 mb-2>
-                <div v-for="day in weekDays" :key="day" text-center text-sm font-semibold text-gray-500 dark:text-gray-400 p-2>{{ day }}</div>
+              <div grid grid-cols-7 gap-1 sm:gap-2 mb-1 sm:mb-2>
+                <div v-for="day in weekDays" :key="day" class="text-center text-xs sm:text-sm font-semibold text-gray-500 dark:text-gray-400 p-1 sm:p-2">{{ day }}</div>
               </div>
 
-              <div grid grid-cols-7 gap-2>
+              <div grid grid-cols-7 gap-1 sm:gap-2>
                 <button
                   v-for="(day, index) in calendarDays"
                   :key="index"
                   @click="day && handleDateClick(day)"
                   :disabled="!day"
                   :class="[
-                    'aspect-square p-2 rounded-lg text-sm font-medium border-none cursor-pointer bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-200 transition-all relative flex flex-col items-center justify-center',
+                    'aspect-square p-1 sm:p-1.5 md:p-2 rounded-md sm:rounded-lg text-xs sm:text-sm font-medium border-none cursor-pointer bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-200 transition-all relative flex flex-col items-center justify-center',
                     {
                       'hover:bg-gray-200 dark:hover:bg-gray-500': day && !isDateDisabled(day),
                       'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500': day && isDateDisabled(day),
@@ -486,102 +492,77 @@ export default {
                     }
                   ]"
                 >
-                  <span v-if="day">{{ day.getDate() }}</span>
-                  <div 
-                    v-if="day && hasTasksOnDate(day)" 
-                    :class="[
-                      'w-1.5 h-1.5 rounded-full mt-0.5',
-                      selectedDate && formatDate(day) === formatDate(selectedDate) ? 'bg-white' : 'bg-blue-600 dark:bg-blue-400'
-                    ]"
-                  ></div>
+                  <span v-if="day" class="text-xs sm:text-sm">{{ day.getDate() }}</span>
+                  <span
+                    v-if="day && getTaskCountForDate(day)"
+                    class="mt-0.5 text-[8px] sm:text-[9px] md:text-[10px] font-semibold text-blue-700 dark:text-blue-300 leading-tight"
+                  >
+                    {{ getTaskCountForDate(day) }}<span class="hidden sm:inline"> task</span><span v-if="getTaskCountForDate(day) > 1" class="hidden sm:inline">s</span>
+                  </span>
                 </button>
               </div>
             </div>
           </div>
 
-          <!-- Day Detail View -->
-          <div min-h-100>
-            <div v-if="selectedDate" bg-gray-50 dark:bg-gray-700 rounded-2xl p-4 transition-colors duration-300>
-              <div flex justify-between items-center mb-4>
-                <h2 text-xl font-bold text-gray-800 dark:text-gray-100>{{ formatDate(selectedDate) }}</h2>
+          <!-- Day Detail View (under calendar) -->
+          <div mt-3 sm:mt-4 md:mt-6>
+            <div v-if="selectedDate" bg-gray-50 dark:bg-gray-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-colors duration-300>
+              <div flex justify-between items-center mb-3 sm:mb-4 flex-wrap gap-2>
+                <h2 class="text-base sm:text-lg md:text-xl font-bold text-gray-800 dark:text-gray-100">{{ formatDate(selectedDate) }}</h2>
                 <button
                   v-if="!isDateDisabled(selectedDate)"
-                  @click="showAddForm = !showAddForm"
-                  flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white border-none rounded-lg cursor-pointer font-medium transition-colors hover:bg-blue-700 dark:hover:bg-blue-600
+                  @click="showAddForm = true"
+                  class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-blue-600 dark:bg-blue-500 text-white border-none rounded-lg cursor-pointer text-xs sm:text-sm font-medium transition-colors hover:bg-blue-700 dark:hover:bg-blue-600"
                 >
-                  <svg class="w-5 h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <line x1="12" y1="5" x2="12" y2="19"/>
                     <line x1="5" y1="12" x2="19" y2="12"/>
                   </svg>
-                  Add Task
+                  <span class="hidden sm:inline">Add Task</span>
+                  <span class="sm:hidden">Add</span>
                 </button>
               </div>
 
-              <!-- Add Task Form -->
-              <div v-if="showAddForm" bg-white dark:bg-gray-600 p-4 rounded-lg mb-4 shadow-sm transition-colors duration-300>
-                <input
-                  v-model="newTask.title"
-                  type="text"
-                  placeholder="Task title"
-                  class="w-full p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-3 font-sans text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                />
-                <input
-                  v-model="newTask.time"
-                  type="time"
-                  class="w-full p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-3 font-sans text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors"
-                />
-                <textarea
-                  v-model="newTask.description"
-                  placeholder="Description (optional)"
-                  class="w-full p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-3 font-sans text-sm resize-none focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                  rows="3"
-                ></textarea>
-                <div flex gap-2>
-                  <button @click="handleAddTask" flex-1 p-3 border-none rounded-lg cursor-pointer font-medium transition-all bg-emerald-500 dark:bg-emerald-600 text-white hover:bg-emerald-600 dark:hover:bg-emerald-700>Save</button>
-                  <button @click="showAddForm = false" flex-1 p-3 border-none rounded-lg cursor-pointer font-medium transition-all bg-gray-200 dark:bg-gray-500 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-400>Cancel</button>
-                </div>
-              </div>
-
               <!-- Tasks List -->
-              <div max-h-100 overflow-y-auto>
-                <div v-if="currentTasks.length === 0" text-center py-12 px-4 text-gray-500 dark:text-gray-400>
-                  <svg w-12 h-12 stroke-2 opacity-50 mb-2 mx-auto viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <div max-h-96 sm:max-h-100 overflow-y-auto>
+                <div v-if="currentTasks.length === 0" class="text-center py-8 sm:py-12 px-4 text-gray-500 dark:text-gray-400">
+                  <svg class="w-10 h-10 sm:w-12 sm:h-12 stroke-2 opacity-50 mb-2 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <circle cx="12" cy="12" r="10"/>
                     <polyline points="12 6 12 12 16 14"/>
                   </svg>
-                  <p>No tasks scheduled</p>
+                  <p class="text-sm sm:text-base">No tasks scheduled</p>
                 </div>
 
                 <div
                   v-for="task in currentTasks"
                   :key="task.id"
                   :class="[
-                    'bg-white dark:bg-gray-600 p-4 rounded-lg mb-3 shadow-sm flex justify-between items-start transition-colors duration-300',
+                    'bg-white dark:bg-gray-600 p-3 sm:p-4 rounded-lg mb-2 sm:mb-3 shadow-sm flex justify-between items-start transition-colors duration-300',
                     { 'opacity-60': task.completed },
                     { 'ring-2 ring-emerald-500 dark:ring-emerald-400 bg-emerald-50 dark:bg-emerald-900/20': isCurrentTask(task.id) && formatDate(selectedDate) === todayFormatted },
                     { 'ring-2 ring-blue-500 dark:ring-blue-400 bg-blue-50 dark:bg-blue-900/20': isNextTask(task.id) && formatDate(selectedDate) === todayFormatted }
                   ]"
                 >
-                  <div class="flex gap-3 flex-1">
+                  <div class="flex gap-2 sm:gap-3 flex-1 min-w-0">
                     <button
                       @click="toggleComplete(task.id)"
                       :disabled="isDateDisabled(selectedDate)"
                       :class="[
-                        'w-5 h-5 min-w-5 border-2 rounded flex items-center justify-center cursor-pointer transition-all mt-1',
+                        'w-4 h-4 sm:w-5 sm:h-5 min-w-4 sm:min-w-5 border-2 rounded flex items-center justify-center cursor-pointer transition-all mt-0.5 sm:mt-1 flex-shrink-0',
                         task.completed 
                           ? 'bg-emerald-500 dark:bg-emerald-600 border-emerald-500 dark:border-emerald-600' 
                           : 'bg-transparent border-gray-300 dark:border-gray-400 hover:border-emerald-500 dark:hover:border-emerald-400',
                         { 'cursor-not-allowed': isDateDisabled(selectedDate) }
                       ]"
                     >
-                      <svg v-if="task.completed" class="w-3 h-3 stroke-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <svg v-if="task.completed" class="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <polyline points="20 6 9 17 4 12"/>
                       </svg>
                     </button>
-                    <div class="flex-1">
-                      <div class="flex items-center gap-2 flex-wrap mb-1">
-                        <div class="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-sm font-semibold">
-                          <svg class="w-4 h-4 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-1 sm:gap-2 flex-wrap mb-1">
+                        <div class="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-xs sm:text-sm font-semibold">
+                          <svg class="w-3 h-3 sm:w-4 sm:h-4 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                             <circle cx="12" cy="12" r="10"/>
                             <polyline points="12 6 12 12 16 14"/>
                           </svg>
@@ -589,33 +570,35 @@ export default {
                         </div>
                         <span 
                           v-if="isCurrentTask(task.id) && formatDate(selectedDate) === todayFormatted"
-                          class="px-2 py-0.5 bg-emerald-500 dark:bg-emerald-600 text-white text-xs font-bold rounded-full flex items-center gap-1"
+                          class="px-1.5 sm:px-2 py-0.5 bg-emerald-500 dark:bg-emerald-600 text-white text-[10px] sm:text-xs font-bold rounded-full flex items-center gap-0.5 sm:gap-1"
                         >
-                          <svg class="w-3 h-3 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <svg class="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                             <polygon points="5 3 19 12 5 21 5 3"/>
                           </svg>
-                          ACTIVE NOW
+                          <span class="hidden sm:inline">ACTIVE NOW</span>
+                          <span class="sm:hidden">ACTIVE</span>
                         </span>
                         <span 
                           v-if="isNextTask(task.id) && formatDate(selectedDate) === todayFormatted"
-                          class="px-2 py-0.5 bg-blue-500 dark:bg-blue-600 text-white text-xs font-bold rounded-full flex items-center gap-1"
+                          class="px-1.5 sm:px-2 py-0.5 bg-blue-500 dark:bg-blue-600 text-white text-[10px] sm:text-xs font-bold rounded-full flex items-center gap-0.5 sm:gap-1"
                         >
-                          <svg class="w-3 h-3 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <svg class="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                             <polyline points="9 18 15 12 9 6"/>
                           </svg>
-                          UP NEXT
+                          <span class="hidden sm:inline">UP NEXT</span>
+                          <span class="sm:hidden">NEXT</span>
                         </span>
                       </div>
-                      <h3 :class="['text-base font-semibold text-gray-800 dark:text-gray-100 mb-1', { 'line-through': task.completed }]">{{ task.title }}</h3>
-                      <p v-if="task.description" class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ task.description }}</p>
+                      <h3 :class="['text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 mb-1 break-words', { 'line-through': task.completed }]">{{ task.title }}</h3>
+                      <p v-if="task.description" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 break-words">{{ task.description }}</p>
                     </div>
                   </div>
                   <button
                     v-if="!isDateDisabled(selectedDate)"
                     @click="deleteTaskItem(task.id)"
-                    class="bg-transparent border-none p-1 text-red-500 dark:text-red-400 cursor-pointer rounded transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
+                    class="bg-transparent border-none p-1 text-red-500 dark:text-red-400 cursor-pointer rounded transition-colors hover:bg-red-100 dark:hover:bg-red-900/30 flex-shrink-0"
                   >
-                    <svg class="w-5 h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <line x1="18" y1="6" x2="6" y2="18"/>
                       <line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
@@ -623,21 +606,70 @@ export default {
                 </div>
               </div>
 
-              <div v-if="isDateDisabled(selectedDate)" class="mt-4 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-800 dark:text-amber-300 transition-colors duration-300">
+              <div v-if="isDateDisabled(selectedDate)" class="mt-3 sm:mt-4 p-2 sm:p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg text-xs sm:text-sm text-amber-800 dark:text-amber-300 transition-colors duration-300">
                 This date is in the past. Viewing only.
               </div>
             </div>
 
-            <div v-else class="flex flex-col items-center justify-center h-full min-h-100 text-gray-500 dark:text-gray-400 text-center">
-              <svg class="w-16 h-16 stroke-2 opacity-50 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <div v-else class="flex flex-col items-center justify-center py-8 sm:py-12 text-gray-500 dark:text-gray-400 text-center">
+              <svg class="w-12 h-12 sm:w-16 sm:h-16 stroke-2 opacity-50 mb-3 sm:mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
                 <line x1="16" y1="2" x2="16" y2="6"/>
                 <line x1="8" y1="2" x2="8" y2="6"/>
                 <line x1="3" y1="10" x2="21" y2="10"/>
               </svg>
-              <p>Select a date to view or add tasks</p>
+              <p class="text-sm sm:text-base">Select a date to view or add tasks</p>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Task Modal -->
+  <div
+    v-if="showAddForm && selectedDate && !isDateDisabled(selectedDate)"
+    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    @click.self="showAddForm = false"
+  >
+    <div class="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-3 sm:mb-4">
+        <h3 class="text-base sm:text-lg font-semibold text-gray-800 dark:text-gray-100">
+          Add Task – {{ formatDate(selectedDate) }}
+        </h3>
+        <button
+          @click="showAddForm = false"
+          class="bg-transparent border-none text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer text-xl sm:text-2xl leading-none"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div>
+        <input
+          v-model="newTask.title"
+          type="text"
+          placeholder="Task title"
+          class="w-full p-2.5 sm:p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-2 sm:mb-3 font-sans text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
+        />
+        <input
+          v-model="newTask.time"
+          type="time"
+          class="w-full p-2.5 sm:p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-2 sm:mb-3 font-sans text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors"
+        />
+        <textarea
+          v-model="newTask.description"
+          placeholder="Description (optional)"
+          class="w-full p-2.5 sm:p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-2 sm:mb-3 font-sans text-sm resize-none focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
+          rows="3"
+        ></textarea>
+        <div class="flex gap-2 mt-2">
+          <button @click="handleAddTask" class="flex-1 p-2.5 sm:p-3 border-none rounded-lg cursor-pointer text-sm sm:text-base font-medium transition-all bg-emerald-500 dark:bg-emerald-600 text-white hover:bg-emerald-600 dark:hover:bg-emerald-700">
+            Save
+          </button>
+          <button @click="showAddForm = false" class="flex-1 p-2.5 sm:p-3 border-none rounded-lg cursor-pointer text-sm sm:text-base font-medium transition-all bg-gray-200 dark:bg-gray-500 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-400">
+            Cancel
+          </button>
         </div>
       </div>
     </div>
