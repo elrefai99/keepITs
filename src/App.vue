@@ -1,12 +1,8 @@
-<script lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useScheduleStore } from './stores/store';
 
-export default {
-  name: 'ScheduleApp',
-  
-  setup() {
-    const store = useScheduleStore()
+const store = useScheduleStore()
     
     // Load user tasks from Firebase on mount
     onMounted(async () => {
@@ -500,62 +496,7 @@ export default {
       const secs = String(timerSeconds.value).padStart(2, '0')
       return `${mins}:${secs}`
     })
-
-    
-    
-    return {
-      currentDate,
-      selectedDate,
-      calendarView,
-      showAddForm,
-      newTask,
-      weekDays,
-      calendarDays,
-      weekCalendarDays,
-      displayedCalendarDays,
-      calendarTitle,
-      monthName,
-      currentYear,
-      todayFormatted,
-      currentTasks,
-      formatDate,
-      isDateDisabled,
-      hasTasksOnDate,
-      getTaskCountForDate,
-      getMeetingCountForDate,
-      getTasksForDay,
-      openGoogleCalendarForTask,
-      getDayClass,
-      changeMonth,
-      handleDateClick,
-      handleAddTask,
-      toggleComplete,
-      deleteTaskItem,
-      // Google Calendar style views
-      timeSlots,
-      formatHour,
-      getTaskPosition,
-      getTasksForDayAndHour,
-      // Timer
-      currentTime,
-      currentTimeFormatted,
-      timerMinutes,
-      timerSeconds,
-      isTimerRunning,
-      isBreakTime,
-      timerDisplay,
-      startTimer,
-      pauseTimer,
-      resetTimer,
-      stopTimer,
-      // Task tracking
-      nextTask,
-      currentActiveTask,
-      isCurrentTask,
-      isNextTask
-    }
-  }
-}
+  
 </script>
 
 <template>
