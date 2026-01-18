@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useScheduleStore } from './stores/store';
 import { formatDate, formatHour, isDateDisabled,weekDays } from './utils/dateUtils'
 import { getHourSlotHeight, getTaskPosition } from './utils/calendarUtils'
+// @ts-ignore
+import html2pdf from 'html2pdf.js'
 import { useCalendar } from './shared/useCalendar'
 import { useTaskLogic } from './shared/useTaskLogic'
 import { useTimer } from './shared/useTimer'
@@ -12,7 +14,7 @@ import { useDragDrop } from './shared/useDragDrop'
     const store = useScheduleStore()
     
     // Calendar Logic
-    const {todayFormatted,currentDate,selectedDate,calendarView,weekCalendarDays,displayedCalendarDays,calendarTitle,changeMonth,handleDateClick: calendarHandleDateClick,timeSlots} = useCalendar()
+    const {todayFormatted,selectedDate,calendarView,weekCalendarDays,displayedCalendarDays,calendarTitle,changeMonth,handleDateClick: calendarHandleDateClick,timeSlots} = useCalendar()
 
     // Time State
     const currentTime = ref(new Date())
@@ -24,9 +26,9 @@ import { useDragDrop } from './shared/useDragDrop'
     const triggerNotification = ref(() => {})
     const onTimerComplete = () => {triggerNotification.value()}
     
-    const {timerMinutes,timerSeconds,isTimerRunning,isBreakTime,timerDisplay,startTimer,pauseTimer,resetTimer,stopTimer} = useTimer(currentActiveTask, onTimerComplete)
+    const {isBreakTime} = useTimer(currentActiveTask, onTimerComplete)
     
-    const {notifiedTasks,checkUpcomingTasks,checkDayChange,showNotification} = useNotifications(store, todayFormatted, isBreakTime)
+    const {checkUpcomingTasks,checkDayChange,showNotification} = useNotifications(store, todayFormatted, isBreakTime)
     
     // Assign the real function
     triggerNotification.value = showNotification
@@ -54,12 +56,40 @@ import { useDragDrop } from './shared/useDragDrop'
         showAddForm.value = false
     }
 
-    const currentTimeFormatted = computed(() => {
-      const hours = String(currentTime.value.getHours()).padStart(2, '0')
-      const minutes = String(currentTime.value.getMinutes()).padStart(2, '0')
-      const seconds = String(currentTime.value.getSeconds()).padStart(2, '0')
-      return `${hours}:${minutes}:${seconds}`
+    // Report Logic
+    const showReport = ref(false)
+    const reportStats = computed(() => {
+        const tasks = currentTasks.value
+        const total = tasks.length
+        const completed = tasks.filter((t: any) => t.completed).length
+        const rate = total > 0 ? Math.round((completed / total) * 100) : 0
+        const pending = total - completed
+        
+        // Encouraging message
+        let message = 'Keep it up!'
+        if (rate === 100 && total > 0) message = 'Perfect Day! 🌟'
+        else if (rate >= 80) message = 'Great Job! 🚀'
+        else if (rate >= 50) message = 'Good Effort! 👍'
+        else if (total === 0) message = 'No tasks for today 🌴'
+        else message = 'Tomorrow is a new start! 💪'
+
+        return { total, completed, rate, pending, message }
     })
+
+    const downloadReport = () => {
+      const element = document.getElementById('daily-report-content')
+      if (!element || !selectedDate.value) return
+      
+      const opt: any = {
+        margin: 0.5,
+        filename: `Daily_Report_${formatDate(selectedDate.value).replace(/ /g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'in', format: 'a5', orientation: 'portrait' }
+      }
+      
+      html2pdf().set(opt).from(element).save()
+    }
 
     const getCurrentTimePosition = () => {
       const hour = currentTime.value.getHours()
@@ -84,11 +114,6 @@ import { useDragDrop } from './shared/useDragDrop'
     const getMeetingCountForDate = (date: Date) => {
       const dateKey = formatDate(date)
       return store.getTasksForDate(dateKey).filter((task: any) => task.meetingUrl).length
-    }
-    
-    const hasTasksOnDate = (date: Date) => {
-      const dateKey = formatDate(date)
-      return store.getTasksForDate(dateKey).length > 0
     }
     
     // Lifecycle
@@ -491,18 +516,35 @@ import { useDragDrop } from './shared/useDragDrop'
             <div v-if="selectedDate" bg-gray-50 dark:bg-gray-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-colors duration-300>
               <div flex justify-between items-center mb-3 sm:mb-4 flex-wrap gap-2>
                 <h2 class="text-base sm:text-lg md:text-xl font-bold text-gray-800 dark:text-gray-100">{{ formatDate(selectedDate) }}</h2>
-                <button
-                  v-if="!isDateDisabled(selectedDate)"
-                  @click="showAddForm = true"
-                  class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-blue-600 dark:bg-blue-500 text-white border-none rounded-lg cursor-pointer text-xs sm:text-sm font-medium transition-colors hover:bg-blue-700 dark:hover:bg-blue-600"
-                >
-                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <line x1="12" y1="5" x2="12" y2="19"/>
-                    <line x1="5" y1="12" x2="19" y2="12"/>
-                  </svg>
-                  <span class="hidden sm:inline">Add Task</span>
-                  <span class="sm:hidden">Add</span>
-                </button>
+                <div class="flex gap-2">
+                  <button
+                    v-if="!isDateDisabled(selectedDate)"
+                    @click="showReport = true"
+                    class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-violet-600 dark:bg-violet-500 text-white border-none rounded-lg cursor-pointer text-xs sm:text-sm font-medium transition-colors hover:bg-violet-700 dark:hover:bg-violet-600 shadow-sm hover:shadow-md"
+                  >
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <span class="hidden sm:inline">End Day Report</span>
+                    <span class="sm:hidden">Report</span>
+                  </button>
+                  <button
+                    v-if="!isDateDisabled(selectedDate)"
+                    @click="showAddForm = true"
+                    class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-blue-600 dark:bg-blue-500 text-white border-none rounded-lg cursor-pointer text-xs sm:text-sm font-medium transition-colors hover:bg-blue-700 dark:hover:bg-blue-600 shadow-sm hover:shadow-lg"
+                  >
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <line x1="12" y1="5" x2="12" y2="19"/>
+                      <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span class="hidden sm:inline">Add Task</span>
+                    <span class="sm:hidden">Add</span>
+                  </button>
+                </div>
               </div>
 
               <!-- Todo List View Toggle -->
@@ -955,6 +997,166 @@ import { useDragDrop } from './shared/useDragDrop'
           </button>
           <button @click="() => { showAddForm = false; editingTaskId = null; }" class="flex-1 p-2.5 sm:p-3 border-none rounded-lg cursor-pointer text-sm sm:text-base font-medium transition-all bg-gray-200 dark:bg-gray-500 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-400">
             Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- End Day Report Modal -->
+  <div
+    v-if="showReport && selectedDate"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    @click.self="showReport = false"
+  >
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-6 relative overflow-hidden transform transition-all animate-in fade-in zoom-in duration-300">
+      <!-- Decorative Background Elements -->
+      <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+      <div class="absolute bottom-0 left-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -ml-16 -mb-16"></div>
+
+      <div class="relative z-10">
+        <!-- Printable Area -->
+        <div id="daily-report-content" class="text-center p-2 rounded-xl bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm">
+          <!-- Header -->
+          <h2 class="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-1 mt-2">
+            Daily Report
+          </h2>
+          <p class="text-gray-500 dark:text-gray-400 font-medium mb-6">
+            {{ formatDate(selectedDate) }}
+          </p>
+
+          <!-- Main Score -->
+          <div class="flex justify-center mb-6">
+            <div class="relative w-32 h-32 flex items-center justify-center">
+              <!-- Circular Progress Background -->
+              <svg class="w-full h-full transform -rotate-90">
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  fill="none"
+                  stroke="currentColor"
+                  class="text-gray-100 dark:text-gray-700"
+                  stroke-width="12"
+                />
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  fill="none"
+                  stroke="currentColor"
+                  :class="[
+                    'transition-all duration-1000 ease-out',
+                    reportStats.rate === 100 ? 'text-emerald-500' :
+                    reportStats.rate >= 80 ? 'text-blue-500' :
+                    reportStats.rate >= 50 ? 'text-amber-500' : 'text-red-500'
+                  ]"
+                  stroke-width="12"
+                  stroke-dasharray="351.86"
+                  :stroke-dashoffset="351.86 - (351.86 * reportStats.rate) / 100"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <div class="absolute text-center">
+                <div class="text-3xl font-bold text-gray-800 dark:text-gray-100">
+                  {{ reportStats.rate }}<span class="text-lg text-gray-500">%</span>
+                </div>
+                <div class="text-[10px] uppercase font-bold text-gray-400 tracking-wide mt-1">Efficiency</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Encouraging Message -->
+          <div class="mb-6">
+            <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100">
+              {{ reportStats.message }}
+            </h3>
+          </div>
+
+          <!-- Stats Grid -->
+          <div class="grid grid-cols-3 gap-3 mb-6">
+            <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600">
+              <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ reportStats.total }}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400 font-medium">Total Tasks</div>
+            </div>
+            <div class="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800">
+              <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ reportStats.completed }}</div>
+              <div class="text-xs text-emerald-600/70 dark:text-emerald-400/70 font-medium">Completed</div>
+            </div>
+            <div class="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800">
+              <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{ reportStats.pending }}</div>
+              <div class="text-xs text-amber-600/70 dark:text-amber-400/70 font-medium">Pending</div>
+            </div>
+          </div>
+
+          <!-- Tasks List for Report -->
+          <div class="text-left bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 sm:p-4">
+            <h4 class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 uppercase tracking-wider border-b border-gray-200 dark:border-gray-600 pb-2">Task Detail</h4>
+            <div 
+              v-for="(task, index) in currentTasks" 
+              :key="task.id"
+              class="flex items-start gap-3 py-2 border-b border-gray-100 dark:border-gray-700/50 last:border-none"
+            >
+              <!-- Status Icon -->
+              <div class="mt-0.5">
+                <div v-if="task.completed" class="text-emerald-500 transform scale-110">
+                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                     <polyline points="20 6 9 17 4 12"></polyline>
+                   </svg>
+                </div>
+                <div v-else class="text-gray-300 dark:text-gray-600">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                  </svg>
+                </div>
+              </div>
+              
+              <!-- Task Info -->
+              <div class="flex-1 min-w-0">
+                 <div class="flex justify-between items-start">
+                   <span 
+                    :class="[
+                      'text-sm font-semibold truncate pr-2',
+                      task.completed ? 'text-gray-500 dark:text-gray-400 line-through' : 'text-gray-800 dark:text-gray-200'
+                    ]"
+                   >
+                     {{ task.title }}
+                   </span>
+                   <span class="text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+                     {{ task.time }}
+                   </span>
+                 </div>
+                 <div v-if="task.description" class="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500 mt-0.5 line-clamp-1">
+                   {{ task.description }}
+                 </div>
+              </div>
+            </div>
+            
+             <div v-if="currentTasks.length === 0" class="text-center py-4 text-xs text-gray-400 italic">
+               No tasks recorded for this day.
+             </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-col gap-2 mt-4">
+          <button 
+            @click="downloadReport"
+            class="w-full py-3 rounded-xl font-bold text-white shadow-lg shadow-blue-500/30 transition-transform active:scale-95 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 flex items-center justify-center gap-2"
+          >
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download PDF
+          </button>
+          
+          <button 
+            @click="showReport = false"
+            class="w-full py-3 rounded-xl font-bold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            Close
           </button>
         </div>
       </div>

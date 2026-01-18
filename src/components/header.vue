@@ -2,7 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useScheduleStore } from '../stores/store';
 import { formatDate, formatHour, isDateDisabled,weekDays } from '../utils/dateUtils'
-import { getHourSlotHeight, getTaskPosition } from '../utils/calendarUtils'
 import { useCalendar } from '../shared/useCalendar'
 import { useTaskLogic } from '../shared/useTaskLogic'
 import { useTimer } from '../shared/useTimer'
