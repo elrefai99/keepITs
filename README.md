@@ -1,110 +1,112 @@
 # Schedule Manager
 
-A **Vue 3 + Vite** schedule / task manager with **Google sign-in (Firebase Auth)** and **task sync (Cloud Firestore)**.
+A powerful, aesthetic **Vue 3 + Vite** schedule and task manager designed for productivity. Features **Google sign-in (Firebase Auth)**, real-time **task sync (Cloud Firestore)**, a robust **Pomodoro timer**, and multiple view modes including Calendar and Kanban board.
 
 ## Features
 
-- **Google authentication** via Firebase Authentication
-- **Tasks by date** stored in Firestore (sync across devices)
-- **Pomodoro timer** (focus/break cycles) + optional browser notifications
-- **Dark mode** UI styling via UnoCSS
+### Advanced Task Scheduling
+*   **Time Ranges**: Schedule tasks with precise "From" and "To" times.
+*   **Smart Activity Tracking**: 
+    *   **ACTIVE NOW**: Tasks currently happening within their time range are highlighted.
+    *   **UP NEXT**: Clearly see what's coming up next.
+    *   **In Progress**: Tasks remain "Active" (not auto-completed) until their scheduled End Time passes.
+*   **Drag & Drop**: Easily reorder tasks or move them between Kanban columns.
+*   **Meeting Integration**: 
+    *   Direct links for **Google Meet** and **Microsoft Teams**.
+    *   One-click **Google Calendar** event creation with pre-filled details.
+*   **Guest Invites**: Add guest emails to tasks for easy reference.
 
-## Tech stack
+### Multiple Views
+*   **Calendar View**: 
+    *   **Month**: Overview of your entire month's workload.
+    *   **Week**: Microsoft Teams-style vertical week view with hourly slots.
+    *   **Day**: Detailed hourly breakdown of your day.
+*   **Kanban Board**: Trello-style board to manage tasks through "To Do", "In Progress", and "Done" stages.
+*   **List View**: A classic, sorted list of your daily agenda.
 
-- **Frontend**: Vue 3, TypeScript, Vite
-- **State**: Pinia (+ persisted state)
-- **Styling**: UnoCSS
-- **Backend-as-a-service**: Firebase (Auth + Firestore)
-- **Container**: Docker (build static assets, serve with Nginx)
+### Productivity Tools
+*   **Smart Focus Timer**: 
+    *   **Pomodoro-style** timer (50/10 min cycles).
+    *   **Auto-Sync**: When you start a task, the timer can automatically set itself to the remaining duration of that task.
+    *   **Notifications**: Browser notifications for task starts and break times.
+*   **Detailed Stats**: Daily task counts and meeting summaries.
 
-## Prerequisites
+### Modern UI/UX
+*   **Dark Mode**: Fully supported, sleek dark theme.
+*   **Responsive Design**: Optimized for Desktop (grid calendars) and Mobile (list views).
+*   **Teams-Style Indicator**: A "current time" red line indicator in Week and Day views.
 
-- **Node.js**: 22+ recommended
-- **Package manager**: `pnpm` (recommended) or `npm`
-- **Firebase project** with:
-  - **Authentication** → enable **Google** provider
-  - **Cloud Firestore** → create database (test mode for local dev, or proper rules)
+## Tech Stack
 
-## Environment variables
+*   **Frontend**: [Vue 3](https://vuejs.org/) (Composition API), [TypeScript](https://www.typescriptlang.org/), [Vite](https://vitejs.dev/)
+*   **State Management**: [Pinia](https://pinia.vuejs.org/) (with persisted state)
+*   **Styling**: [UnoCSS](https://unocss.dev/) (Utility-first CSS engine)
+*   **Backend & Auth**: [Firebase](https://firebase.google.com/) (Authentication, Cloud Firestore)
+*   **Icons**: SVG & Iconify
 
-Create a `.env` file in the project root:
+## Getting Started
 
-```bash
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-VITE_FIREBASE_MEASUREMENT_ID=...
-```
+### Prerequisites
+*   **Node.js**: v18+ recommended
+*   **pnpm** (recommended) or npm
+*   **Firebase Project**:
+    1.  Create a project at [console.firebase.google.com](https://console.firebase.google.com/)
+    2.  Enable **Authentication** (Google Sign-in provider)
+    3.  Create a **Cloud Firestore** database
 
-Notes:
-- Vite exposes `VITE_*` variables to the browser. Firebase web config values are generally safe to expose, but **your Firestore security rules must protect data**.
+### Installation
 
-## Getting started (local development)
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/yourusername/schedule-manager.git
+    cd schedule-manager
+    ```
 
-Install dependencies:
+2.  **Install dependencies**
+    ```bash
+    pnpm install
+    ```
 
-```bash
-pnpm install
-```
+3.  **Configure Environment Variables**
+    Create a `.env` file in the root directory:
+    ```env
+    VITE_FIREBASE_API_KEY=your_api_key
+    VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+    VITE_FIREBASE_PROJECT_ID=your_project_id
+    VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+    VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+    VITE_FIREBASE_APP_ID=your_app_id
+    ```
 
-Run the dev server:
+4.  **Run Development Server**
+    ```bash
+    pnpm dev
+    ```
 
-```bash
-pnpm dev
-```
+## Docker Support
 
-Build for production:
-
-```bash
-pnpm build
-```
-
-Preview the production build locally:
-
-```bash
-pnpm preview
-```
-
-## Docker
-
-Build and run with Docker Compose:
+Build and serve the production version using Docker Compose:
 
 ```bash
 docker compose up --build
 ```
-
-Then open `http://localhost:8080`.
-
-What it does:
-- Builds the Vite app inside a Node image
-- Serves the compiled `dist/` with Nginx on port **80** (mapped to **8080** on your machine)
+Access the app at `http://localhost:8080`.
 
 ## Deployment
 
 ### Netlify
+1.  Connect your repository to Netlify.
+2.  Set Build Command: `pnpm build`
+3.  Set Publish Directory: `dist`
+4.  Add your `VITE_FIREBASE_*` environment variables in Netlify settings.
 
-This repo includes `netlify.toml`. Typical settings:
-- **Build command**: `pnpm build` (or `npm run build`)
-- **Publish directory**: `dist`
+### Docker
+The included `Dockerfile` builds the app and serves it via Nginx, ready for any container orchestration platform.
 
-Make sure to set the same Firebase `VITE_FIREBASE_*` variables in Netlify environment settings.
+## Contributing
 
-## Optional API proxy / backend (if you have one)
-
-The Vite dev server is configured to proxy `/api` to `http://localhost:9000` (see `vite.config.ts`).
-
-Also, there is a component (`src/components/google.vue`) that posts Google credentials to:
-- `http://localhost:9000/api/v1/auth/google`
-
-If you’re not running a backend on port 9000, you can ignore that component (the app’s main login flow uses **Firebase Auth popup**).
-
-## Recommended IDE setup
-
-- **VS Code** + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (disable Vetur)
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-Add your license here (e.g. MIT) if this project is intended to be shared.
+This project is open-source and available under the [MIT License](LICENSE).
