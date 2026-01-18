@@ -1,324 +1,38 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useScheduleStore } from './stores/store';
+import { formatDate, formatHour, isDateDisabled,weekDays } from './utils/dateUtils'
+import { getHourSlotHeight, getTaskPosition } from './utils/calendarUtils'
+import { useCalendar } from './shared/useCalendar'
+import { useTaskLogic } from './shared/useTaskLogic'
+import { useTimer } from './shared/useTimer'
+import { useNotifications } from './shared/useNotifications'
+import { useDragDrop } from './shared/useDragDrop'
 
     const store = useScheduleStore()
     
-    // Load user tasks from Firebase on mount
-    onMounted(async () => {
-      if (!store.synced) {
-        await store.loadUserTasks()
-      }
-    })
-    
-    const currentDate: any = ref(new Date())
-    const selectedDate: any = ref<Date | number>(new Date())
-    const calendarView = ref<'day' | 'week' | 'month'>('month')
-    const showAddForm: any = ref(false)
-    const editingTaskId = ref<string | null>(null)
-    const showTodoList = ref(true)
-    const newTask: any = ref({
-      title: '',
-      time: '09:00',
-      endTime: '10:00',
-      description: '',
-      completed: false,
-      meetingType: 'none',
-      meetingUrl: '',
-      guestEmailsText: ''
-    })
-    
-    // Timer state
+    // Calendar Logic
+    const {todayFormatted,currentDate,selectedDate,calendarView,weekCalendarDays,displayedCalendarDays,calendarTitle,changeMonth,handleDateClick: calendarHandleDateClick,timeSlots} = useCalendar()
+
+    // Time State
     const currentTime = ref(new Date())
-    const timerMinutes = ref(50)
-    const timerSeconds = ref(0)
-    const isTimerRunning = ref(false)
-    const isBreakTime = ref(false)
-    const timerInterval: any = ref(null)
     
-    // Notification tracking
-    const notifiedTasks = ref<Set<string>>(new Set())
-    const lastBreakNotification = ref<number>(0)
-    
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
-    // Create audio context for notification sounds
-    const playNotificationSound = (type: 'break' | 'task' = 'task') => {
-      try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-        const oscillator = audioContext.createOscillator()
-        const gainNode = audioContext.createGain()
-        
-        oscillator.connect(gainNode)
-        gainNode.connect(audioContext.destination)
-        
-        if (type === 'break') {
-          // Break sound: two-tone chime
-          oscillator.frequency.setValueAtTime(800, audioContext.currentTime)
-          oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1)
-          gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
-          oscillator.start(audioContext.currentTime)
-          oscillator.stop(audioContext.currentTime + 0.5)
-        } else {
-          // Task start sound: gentle beep
-          oscillator.frequency.setValueAtTime(600, audioContext.currentTime)
-          gainNode.gain.setValueAtTime(0.2, audioContext.currentTime)
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
-          oscillator.start(audioContext.currentTime)
-          oscillator.stop(audioContext.currentTime + 0.3)
-        }
-      } catch (error) {
-        console.warn('Could not play notification sound:', error)
-      }
-    }
-    
-    // Check for upcoming tasks and play notification
-    const checkUpcomingTasks = () => {
-      const dateKey = todayFormatted.value
-      const tasks = store.getTasksForDate(dateKey)
-        .filter(task => !task.completed)
-        .sort((a, b) => a.time.localeCompare(b.time))
-      
-      if (tasks.length === 0) return
-      
-      const currentTimeStr = getCurrentTimeString()
-      const [currentHour, currentMin] = currentTimeStr.split(':').map(Number)
-      const currentTotalMinutes = currentHour * 60 + currentMin
-      
-      tasks.forEach(task => {
-        // Skip if already notified
-        if (notifiedTasks.value.has(task.id)) return
-        
-        const [taskHour, taskMin] = task.time.split(':').map(Number)
-        const taskTotalMinutes = taskHour * 60 + taskMin
-        
-        // Play sound exactly when task time is reached
-        if (taskTotalMinutes === currentTotalMinutes) {
-          playNotificationSound('task')
-          notifiedTasks.value.add(task.id)
-          
-          // Show notification
-          const message = `⏰ Task starting now: ${task.title}`
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('Schedule Manager', { body: message })
-          } else if ('Notification' in window && Notification.permission !== 'denied') {
-            Notification.requestPermission().then(permission => {
-              if (permission === 'granted') {
-                new Notification('Schedule Manager', { body: message })
-              }
-            })
-          }
-        }
-      })
-    }
-    
-    // Update current time every second and check tasks
-    setInterval(() => {
-      currentTime.value = new Date()
-      checkAndCompletePassedTasks()
-      checkUpcomingTasks()
-    }, 1000)
-    
-    const currentTimeFormatted = computed(() => {
-      const hours = String(currentTime.value.getHours()).padStart(2, '0')
-      const minutes = String(currentTime.value.getMinutes()).padStart(2, '0')
-      const seconds = String(currentTime.value.getSeconds()).padStart(2, '0')
-      return `${hours}:${minutes}:${seconds}`
-    })
-    
-    // Get current time in HH:MM format for comparison
-    const getCurrentTimeString = () => {
-      const hours = String(currentTime.value.getHours()).padStart(2, '0')
-      const minutes = String(currentTime.value.getMinutes()).padStart(2, '0')
-      return `${hours}:${minutes}`
-    }
+    // Task Logic
+    const {showAddForm,editingTaskId,showTodoList,newTask,currentTasks,categorizedTasks,nextTask,currentActiveTask,handleAddTask,handleEditTask,toggleComplete,deleteTaskItem,openGoogleCalendarForTask,checkAndCompletePassedTasks,isCurrentTask,isNextTask} = useTaskLogic(store, selectedDate, todayFormatted, currentTime)
 
-    const getMinutesFromTime = (timeStr: string) => {
-      if (!timeStr) return 0
-      const [hours, minutes] = timeStr.split(':').map(Number)
-      return hours * 60 + minutes
-    }
+    // Timer Logic
+    const triggerNotification = ref(() => {})
+    const onTimerComplete = () => {triggerNotification.value()}
     
-    // Get current time position for indicator line (Teams-style)
-    const getCurrentTimePosition = () => {
-      const hour = currentTime.value.getHours()
-      const minute = currentTime.value.getMinutes()
-      const startHour = 6
-      
-      if (hour < startHour || hour > 23) return null
-      
-      const hourSlotHeight = getHourSlotHeight()
-      const top = ((hour - startHour) * hourSlotHeight) + (minute * (hourSlotHeight / 60))
-      
-      return { top, display: true }
-    }
+    const {timerMinutes,timerSeconds,isTimerRunning,isBreakTime,timerDisplay,startTimer,pauseTimer,resetTimer,stopTimer} = useTimer(currentActiveTask, onTimerComplete)
     
-    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December']
+    const {notifiedTasks,checkUpcomingTasks,checkDayChange,showNotification} = useNotifications(store, todayFormatted, isBreakTime)
     
-    const formatDate = (date: Date) => {
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
-    }
-    
-    // Reset notified tasks at the start of each day
-    const checkDayChange = () => {
-      const todayKey = formatDate(new Date())
-      const storedDay = localStorage.getItem('lastNotificationDay')
-      
-      if (storedDay !== todayKey) {
-        notifiedTasks.value.clear()
-        localStorage.setItem('lastNotificationDay', todayKey)
-      }
-    }
-    
-    // Initialize day change check after formatDate is defined
-    onMounted(() => {
-      checkDayChange()
-      // Check every minute for day change
-      setInterval(checkDayChange, 60000)
-    })
-    
-    const isDateDisabled = (date: Date) => {
-      const checkDate = new Date(date)
-      checkDate.setHours(0, 0, 0, 0)
-      return checkDate < today  
-    }
-    
-    const calendarDays = computed(() => {
-      const year = currentDate.value.getFullYear()
-      const month = currentDate.value.getMonth()
-      const firstDay = new Date(year, month, 1)
-      const lastDay = new Date(year, month + 1, 0)
-      const daysInMonth = lastDay.getDate()
-      const startingDayOfWeek = firstDay.getDay()
-      
-      const days = []
-      for (let i = 0; i < startingDayOfWeek; i++) {
-        days.push(null)
-      }
-      for (let i = 1; i <= daysInMonth; i++) {
-        days.push(new Date(year, month, i))
-      }
-      return days
-    })
+    // Assign the real function
+    triggerNotification.value = showNotification
 
-    const getWeekStart = (date: Date) => {
-      const d = new Date(date)
-      const day = d.getDay()
-      d.setDate(d.getDate() - day)
-      d.setHours(0, 0, 0, 0)
-      return d
-    }
 
-    const weekCalendarDays = computed(() => {
-      const base = selectedDate.value || today
-      const start = getWeekStart(base)
-      const days: (Date | null)[] = []
-      for (let i = 0; i < 7; i++) {
-        const current = new Date(start)
-        current.setDate(start.getDate() + i)
-        days.push(current)
-      }
-      return days
-    })
-
-    const dayCalendarDays = computed(() => {
-      if (!selectedDate.value) return []
-      return [selectedDate.value]
-    })
-
-    const displayedCalendarDays = computed(() => {
-      if (calendarView.value === 'month') return calendarDays.value
-      if (calendarView.value === 'week') return weekCalendarDays.value
-      if (calendarView.value === 'day') return dayCalendarDays.value
-      return calendarDays.value
-    })
-    
-    const monthName = computed(() => monthNames[currentDate.value.getMonth()])
-    const currentYear = computed(() => currentDate.value.getFullYear())
-    const todayFormatted = computed(() => formatDate(today))
-
-    const calendarTitle = computed(() => {
-      if (calendarView.value === 'month') {
-        return `${monthName.value} ${currentYear.value}`
-      }
-
-      if (calendarView.value === 'week') {
-        const base = selectedDate.value || today
-        const start = getWeekStart(base)
-        const end = new Date(start)
-        end.setDate(start.getDate() + 6)
-        return `Week ${formatDate(start)} - ${formatDate(end)}`
-      }
-
-      const base = selectedDate.value || today
-      return `Day ${formatDate(base)}`
-    })
-    
-    const currentTasks = computed(() => {
-      if (!selectedDate.value) return []
-      const dateKey = formatDate(selectedDate.value)
-      const tasks = store.getTasksForDate(dateKey)
-      // Sort by order first, then by time
-      return tasks.sort((a, b) => {
-        if (a.order !== undefined && b.order !== undefined) {
-          return a.order - b.order
-        }
-        return a.time.localeCompare(b.time)
-      })
-    })
-
-    // Categorize tasks for todo list
-    const categorizedTasks = computed(() => {
-      if (!selectedDate.value) return { workedOn: [], willStart: [], ended: [] }
-      
-      const dateKey = formatDate(selectedDate.value)
-      const isToday = dateKey === todayFormatted.value
-      const tasks = currentTasks.value
-      const currentTimeStr = getCurrentTimeString()
-      const currentMinutes = getMinutesFromTime(currentTimeStr)
-      
-      const workedOn: any[] = []
-      const willStart: any[] = []
-      const ended: any[] = []
-      
-      tasks.forEach(task => {
-        const startMinutes = getMinutesFromTime(task.time)
-        // Default duration 1 hour if endTime not present
-        const endMinutes = task.endTime ? getMinutesFromTime(task.endTime) : startMinutes + 60
-
-        if (task.completed) {
-          workedOn.push(task)
-        } else if (isToday) {
-          // Check range
-          if (currentMinutes > endMinutes) {
-            ended.push(task)
-          } else if (currentMinutes >= startMinutes && currentMinutes <= endMinutes) {
-            workedOn.push(task)
-          } else {
-            willStart.push(task)
-          }
-        } else {
-          // For future dates, all non-completed tasks are "will start"
-          willStart.push(task)
-        }
-      })
-      
-      return { workedOn, willStart, ended }
-    })
-
-    // Drag and drop state
-    const draggedTaskId = ref<string | null>(null)
-    const draggedOverTaskId = ref<string | null>(null)
-    const draggedOverColumn = ref<string | null>(null)
-    
-    // Column definitions for Trello-style board
+    // Drag and Drop Logic
     const columns = [
       { id: 'willStart', title: 'To Do', color: 'blue', icon: '→' },
       { id: 'workedOn', title: 'In Progress', color: 'emerald', icon: '✓' },
@@ -331,69 +45,35 @@ import { useScheduleStore } from './stores/store';
       if (columnId === 'ended') return categorizedTasks.value.ended
       return []
     }
-    
-    // Get next upcoming task for today
-    const nextTask = computed(() => {
-      const dateKey = todayFormatted.value
-      const tasks = store.getTasksForDate(dateKey)
-        .filter(task => !task.completed)
-        .sort((a, b) => a.time.localeCompare(b.time))
-      
-      const currentTimeStr = getCurrentTimeString()
-      return tasks.find(task => task.time > currentTimeStr) || null
+
+    const {draggedTaskId,draggedOverTaskId,draggedOverColumn,handleDragStart,handleDragOver,handleDragLeave,handleColumnDragOver,handleColumnDragLeave,handleDragEnd,handleDrop} = useDragDrop(selectedDate, store, currentTasks, getTasksForColumn)
+
+    // View Helpers
+    const handleDateClick = (date: Date) => {
+        calendarHandleDateClick(date)
+        showAddForm.value = false
+    }
+
+    const currentTimeFormatted = computed(() => {
+      const hours = String(currentTime.value.getHours()).padStart(2, '0')
+      const minutes = String(currentTime.value.getMinutes()).padStart(2, '0')
+      const seconds = String(currentTime.value.getSeconds()).padStart(2, '0')
+      return `${hours}:${minutes}:${seconds}`
     })
-    
-    // Get current active task (task whose time has started but not yet completed)
-    const currentActiveTask = computed(() => {
-      const dateKey = todayFormatted.value
-      const tasks = store.getTasksForDate(dateKey)
-        .filter(task => !task.completed)
-        .sort((a, b) => a.time.localeCompare(b.time))
-      
-      const currentTimeStr = getCurrentTimeString()
-      const currentMinutes = getMinutesFromTime(currentTimeStr)
-      
-      // Find task where current time is within range
-      return tasks.find(task => {
-        const startMinutes = getMinutesFromTime(task.time)
-        const endMinutes = task.endTime ? getMinutesFromTime(task.endTime) : startMinutes + 60
-        return currentMinutes >= startMinutes && currentMinutes <= endMinutes
-      }) || null
-    })
-    
-    // Auto-complete tasks when their time has passed
-    const checkAndCompletePassedTasks = () => {
-      const dateKey = todayFormatted.value
-      const tasks = store.getTasksForDate(dateKey)
-      const currentTimeStr = getCurrentTimeString()
-      const currentMinutes = getMinutesFromTime(currentTimeStr)
-      
-      tasks.forEach(task => {
-        if (!task.completed) {
-          const startMinutes = getMinutesFromTime(task.time)
-          const endMinutes = task.endTime ? getMinutesFromTime(task.endTime) : startMinutes + 60
-          
-          // Auto-complete if time is past end time + buffer (e.g. 1 minute)
-          if (currentMinutes > endMinutes) {
-             store.toggleTaskComplete(dateKey, task.id)
-          }
-        }
-      })
+
+    const getCurrentTimePosition = () => {
+      const hour = currentTime.value.getHours()
+      const minute = currentTime.value.getMinutes()
+      const startHour = 6
+      if (hour < startHour || hour > 23) return null
+      const hourSlotHeight = getHourSlotHeight()
+      const top = ((hour - startHour) * hourSlotHeight) + (minute * (hourSlotHeight / 60))
+      return { top, display: true }
     }
-    
-    // Check if a task is the current active one
-    const isCurrentTask = (taskId: string) => {
-      return currentActiveTask.value?.id === taskId
-    }
-    
-    // Check if a task is the next upcoming one
-    const isNextTask = (taskId: string) => {
-      return nextTask.value?.id === taskId
-    }
-    
-    const hasTasksOnDate = (date: Date) => {
+
+    const getAllTasksForDay = (date: Date) => {
       const dateKey = formatDate(date)
-      return store.getTasksForDate(dateKey).length > 0
+      return store.getTasksForDate(dateKey).sort((a: any, b: any) => a.time.localeCompare(b.time))
     }
 
     const getTaskCountForDate = (date: Date) => {
@@ -403,466 +83,29 @@ import { useScheduleStore } from './stores/store';
 
     const getMeetingCountForDate = (date: Date) => {
       const dateKey = formatDate(date)
-      return store.getTasksForDate(dateKey).filter(task => task.meetingUrl).length
+      return store.getTasksForDate(dateKey).filter((task: any) => task.meetingUrl).length
     }
-
-    const getTasksForDay = (date: Date) => {
+    
+    const hasTasksOnDate = (date: Date) => {
       const dateKey = formatDate(date)
-      return store.getTasksForDate(dateKey).slice().sort((a, b) => a.time.localeCompare(b.time))
-    }
-
-    // Time slots for Google Calendar-style views (6 AM to 11 PM)
-    const timeSlots = computed(() => {
-      const slots = []
-      for (let hour = 6; hour <= 23; hour++) {
-        slots.push(hour)
-      }
-      return slots
-    })
-
-    // Get hour slot height based on screen size (for responsive task positioning)
-    // These match Teams-style Tailwind classes: h-12=48px, h-14=56px, h-16=64px, h-20=80px
-    const getHourSlotHeight = () => {
-      if (typeof window === 'undefined') return 56
-      const width = window.innerWidth
-      if (width < 640) return 48  // default (h-12 = 3rem = 48px)
-      if (width < 768) return 56  // sm (h-14 = 3.5rem = 56px)
-      if (width < 1024) return 64  // md (h-16 = 4rem = 64px)
-      return 80  // lg+ (h-20 = 5rem = 80px)
-    }
-
-    // Format hour for display
-    const formatHour = (hour: number) => {
-      if (hour === 0) return '12 AM'
-      if (hour < 12) return `${hour} AM`
-      if (hour === 12) return '12 PM'
-      return `${hour - 12} PM`
-    }
-
-    // Calculate task position and height based on exact time
-    const getTaskPosition = (timeStr: string, hourSlotHeight: number = 60) => {
-      const [hourStr, minuteStr] = timeStr.split(':')
-      const hour = parseInt(hourStr) || 0
-      const minute = parseInt(minuteStr) || 0
-      
-      // Start from 6 AM (hour 6)
-      const startHour = 6
-      if (hour < startHour) return { top: 0, height: hourSlotHeight, display: false }
-      if (hour > 23) return { top: 0, height: hourSlotHeight, display: false }
-      
-      // Calculate position: each hour = hourSlotHeight px, each minute = hourSlotHeight/60 px
-      const top = ((hour - startHour) * hourSlotHeight) + (minute * (hourSlotHeight / 60))
-      // Default height: 1 hour slot
-      const height = hourSlotHeight
-      
-      return { top, height, display: true }
-    }
-
-    // Get all tasks for a specific day (for exact positioning)
-    const getAllTasksForDay = (date: Date) => {
-      const dateKey = formatDate(date)
-      return store.getTasksForDate(dateKey).sort((a, b) => a.time.localeCompare(b.time))
-    }
-
-    // Get tasks for a specific day and hour slot (for filtering)
-    const getTasksForDayAndHour = (date: Date, hour: number) => {
-      const dateKey = formatDate(date)
-      const tasks = store.getTasksForDate(dateKey)
-      return tasks.filter(task => {
-        const [taskHour] = task.time.split(':')
-        return parseInt(taskHour) === hour
-      }).sort((a, b) => a.time.localeCompare(b.time))
-    }
-
-    const openGoogleCalendarForTask = () => {
-      if (!selectedDate.value) return
-
-      const title = newTask.value.title || 'Meeting'
-
-      const descriptionParts: string[] = []
-      if (newTask.value.description) descriptionParts.push(newTask.value.description)
-      if (newTask.value.meetingUrl) descriptionParts.push(`Meeting link: ${newTask.value.meetingUrl}`)
-      const details = descriptionParts.join('\\n\\n')
-
-      const [hourStr, minuteStr] = (newTask.value.time || '09:00').split(':')
-      const hour = Number(hourStr) || 9
-      const minute = Number(minuteStr) || 0
-
-      const start = new Date(selectedDate.value)
-      start.setHours(hour, minute, 0, 0)
-      const end = new Date(start)
-      end.setMinutes(start.getMinutes() + 30)
-
-      const formatForGoogle = (d: Date) => {
-        const pad = (n: number) => String(n).padStart(2, '0')
-        return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`
-      }
-
-      const datesParam = `${formatForGoogle(start)}/${formatForGoogle(end)}`
-
-      const guests = (newTask.value.guestEmailsText || '')
-        .split(/[,;]+/)
-        .map((e: string) => e.trim())
-        .filter((e: string) => e.length > 0)
-
-      const baseUrl = 'https://calendar.google.com/calendar/u/0/r/eventedit'
-      const params = new URLSearchParams()
-      params.set('text', title)
-      params.set('dates', datesParam)
-      if (details) params.set('details', details)
-      if (guests.length) params.set('add', guests.join(','))
-      if (newTask.value.meetingUrl) params.set('location', newTask.value.meetingUrl)
-
-      const url = `${baseUrl}?${params.toString()}`
-      window.open(url, '_blank')
+      return store.getTasksForDate(dateKey).length > 0
     }
     
-    const getDayClass = (day: Date) => {
-      if (!day) return ''
-      
-      const dateKey = formatDate(day)
-      const isToday = dateKey === todayFormatted.value
-      const isSelected = selectedDate.value && dateKey === formatDate(selectedDate.value)
-      const disabled = isDateDisabled(day)
-      const hasTasks = hasTasksOnDate(day)
-      
-      return {
-        disabled,
-        today: isToday,
-        selected: isSelected,
-        'has-tasks': hasTasks
-      }
-    }
-    
-    const changeMonth = (delta: number) => {
-      if (calendarView.value === 'month') {
-      currentDate.value = new Date(
-        currentDate.value.getFullYear(),
-        currentDate.value.getMonth() + delta,
-        1
-      )
-        return
-      }
-
-      // For week/day views, move the selected date
-      const base = selectedDate.value || today
-      const newDate = new Date(base)
-
-      if (calendarView.value === 'week') {
-        newDate.setDate(newDate.getDate() + delta * 7)
-      } else {
-        // day view
-        newDate.setDate(newDate.getDate() + delta)
-      }
-
-      selectedDate.value = newDate
-      currentDate.value = newDate
-    }
-    
-    const handleDateClick = (date: Date) => {
-      // Allow selecting past dates for view-only mode
-        selectedDate.value = date
-        showAddForm.value = false
-    }
-    
-    const handleAddTask = () => {
-      if (!newTask.value.title || !selectedDate.value) return
-      
-      const dateKey = formatDate(selectedDate.value)
-
-      const guests = (newTask.value.guestEmailsText || '')
-        .split(/[,;]+/)
-        .map((e: string) => e.trim())
-        .filter((e: string) => e.length > 0)
-
-      if (editingTaskId.value) {
-        // Update existing task
-        store.updateTask(dateKey, {
-          id: editingTaskId.value,
-          ...newTask.value,
-          guestEmails: guests,
-          endTime: newTask.value.endTime || (() => {
-             const [h, m] = newTask.value.time.split(':').map(Number)
-             const endH = (h + 1) % 24
-             return `${String(endH).padStart(2,'0')}:${String(m).padStart(2,'0')}`
-          })()
-        })
-      } else {
-        // Create new task
-        store.addTask(dateKey, {
-          ...newTask.value,
-          guestEmails: guests,
-          // Ensure endTime is set, default to 1 hour after time if needed
-          endTime: newTask.value.endTime || (() => {
-             const [h, m] = newTask.value.time.split(':').map(Number)
-             const endH = (h + 1) % 24
-             return `${String(endH).padStart(2,'0')}:${String(m).padStart(2,'0')}`
-          })()
-        })
+    // Lifecycle
+    onMounted(async () => {
+      if (!store.synced) {
+        await store.loadUserTasks()
       }
       
-      newTask.value = {
-        title: '',
-        time: '09:00',
-        endTime: '10:00',
-        description: '',
-        completed: false,
-        meetingType: 'none',
-        meetingUrl: '',
-        guestEmailsText: ''
-      }
-      showAddForm.value = false
-      editingTaskId.value = null
-    }
-
-    const handleEditTask = (task: any) => {
-      editingTaskId.value = task.id
-      newTask.value = {
-        title: task.title,
-        time: task.time,
-        endTime: task.endTime || (() => {
-             const [h, m] = task.time.split(':').map(Number)
-             const endH = (h + 1) % 24
-             return `${String(endH).padStart(2,'0')}:${String(m).padStart(2,'0')}`
-          })(),
-        description: task.description || '',
-        completed: task.completed,
-        meetingType: task.meetingType || 'none',
-        meetingUrl: task.meetingUrl || '',
-        guestEmailsText: (task.guestEmails || []).join(', ')
-      }
-      showAddForm.value = true
-    }
-    
-    const toggleComplete = (taskId: string) => {
-      // Read-only for past dates
-      if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
-      const dateKey = formatDate(selectedDate.value)
-      store.toggleTaskComplete(dateKey, taskId)
-    }
-    
-    const deleteTaskItem = (taskId: string) => {
-      // Read-only for past dates
-      if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
-      const dateKey = formatDate(selectedDate.value)
-      store.deleteTask(dateKey, taskId)
-    }
-
-    // Drag and drop handlers
-    const handleDragStart = (e: DragEvent, taskId: string) => {
-      if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
-      draggedTaskId.value = taskId
-      if (e.dataTransfer) {
-        e.dataTransfer.effectAllowed = 'move'
-        e.dataTransfer.setData('text/plain', taskId)
-      }
-    }
-
-    const handleDragOver = (e: DragEvent, taskId: string) => {
-      if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
-      e.preventDefault()
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'move'
-      }
-      draggedOverTaskId.value = taskId
-    }
-
-    const handleDragLeave = () => {
-      draggedOverTaskId.value = null
-    }
-
-    const handleDrop = (e: DragEvent, targetTaskId?: string, targetColumn?: string) => {
-      if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
-      e.preventDefault()
+      checkDayChange()
       
-      const sourceTaskId = draggedTaskId.value
-      if (!sourceTaskId) {
-        draggedTaskId.value = null
-        draggedOverTaskId.value = null
-        draggedOverColumn.value = null
-        return
-      }
-
-      const dateKey = formatDate(selectedDate.value)
-      const tasks = [...currentTasks.value]
-      const sourceTask = tasks.find(t => t.id === sourceTaskId)
-      
-      if (!sourceTask) {
-        draggedTaskId.value = null
-        draggedOverTaskId.value = null
-        draggedOverColumn.value = null
-        return
-      }
-
-      // If dropping on a column (not a specific task)
-      if (targetColumn && !targetTaskId) {
-        // Move task to the end of the target column
-        const targetColumnTasks = getTasksForColumn(targetColumn)
-        const newOrder = targetColumnTasks.length
-        
-        // Update task order
-        sourceTask.order = newOrder
-        
-        // Save to Firebase
-        store.reorderTasks(dateKey, tasks.map(t => t.id))
-      } 
-      // If dropping on a specific task
-      else if (targetTaskId) {
-        const sourceIndex = tasks.findIndex(t => t.id === sourceTaskId)
-        const targetIndex = tasks.findIndex(t => t.id === targetTaskId)
-        
-        if (sourceIndex === -1 || targetIndex === -1) {
-          draggedTaskId.value = null
-          draggedOverTaskId.value = null
-          draggedOverColumn.value = null
-          return
-        }
-
-        // Reorder tasks
-        const [removed] = tasks.splice(sourceIndex, 1)
-        tasks.splice(targetIndex, 0, removed)
-
-        // Update order values
-        tasks.forEach((task, index) => {
-          task.order = index
-        })
-
-        // Save new order
-        const taskIds = tasks.map(t => t.id)
-        store.reorderTasks(dateKey, taskIds)
-      }
-
-      draggedTaskId.value = null
-      draggedOverTaskId.value = null
-      draggedOverColumn.value = null
-    }
-
-    const handleColumnDragOver = (e: DragEvent, columnId: string) => {
-      if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
-      e.preventDefault()
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'move'
-      }
-      draggedOverColumn.value = columnId
-    }
-
-    const handleColumnDragLeave = () => {
-      draggedOverColumn.value = null
-    }
-
-    const handleDragEnd = () => {
-      draggedTaskId.value = null
-      draggedOverTaskId.value = null
-      draggedOverColumn.value = null
-    }
-    
-    // Timer functions
-    const startTimer = () => {
-      if (isTimerRunning.value) return
-      
-      // Sync timer duration with active task end time if available
-      if (!isBreakTime.value && currentActiveTask.value) {
-        const now = new Date()
-        const currentHours = now.getHours()
-        const currentMinutes = now.getMinutes()
-        const currentSeconds = now.getSeconds()
-        
-        const currentTotalMinutes = currentHours * 60 + currentMinutes
-        
-        const task = currentActiveTask.value
-        const startTotalMinutes = getMinutesFromTime(task.time)
-        const endTotalMinutes = task.endTime ? getMinutesFromTime(task.endTime) : startTotalMinutes + 60
-        
-        let remainingMinutes = endTotalMinutes - currentTotalMinutes
-        
-        if (remainingMinutes > 0) {
-           if (currentSeconds > 0) {
-             timerMinutes.value = remainingMinutes - 1
-             timerSeconds.value = 60 - currentSeconds
-           } else {
-             timerMinutes.value = remainingMinutes
-             timerSeconds.value = 0
-           }
-        }
-      }
-
-      isTimerRunning.value = true
-      timerInterval.value = setInterval(() => {
-        if (timerSeconds.value === 0) {
-          if (timerMinutes.value === 0) {
-            // Timer reached 0
-            stopTimer()
-            showNotification()
-            return
-          }
-          timerMinutes.value--
-          timerSeconds.value = 59
-        } else {
-          timerSeconds.value--
-        }
+      setInterval(() => {
+        currentTime.value = new Date()
+        checkAndCompletePassedTasks()
+        checkUpcomingTasks()
       }, 1000)
-    }
-    
-    const pauseTimer = () => {
-      isTimerRunning.value = false
-      if (timerInterval.value) {
-        clearInterval(timerInterval.value)
-        timerInterval.value = null
-      }
-    }
-    
-    const resetTimer = () => {
-      pauseTimer()
-      if (isBreakTime.value) {
-        timerMinutes.value = 10
-      } else {
-        timerMinutes.value = 50
-      }
-      timerSeconds.value = 0
-    }
-    
-    const stopTimer = () => {
-      pauseTimer()
-      isBreakTime.value = !isBreakTime.value
-      if (isBreakTime.value) {
-        timerMinutes.value = 10
-      } else {
-        timerMinutes.value = 50
-      }
-      timerSeconds.value = 0
-    }
-    
-    const showNotification = () => {
-      const now = Date.now()
-      // Prevent duplicate notifications within 2 seconds
-      if (now - lastBreakNotification.value < 2000) return
       
-      lastBreakNotification.value = now
-      
-      const message = isBreakTime.value 
-        ? '🎉 Break time is over! Ready to get back to work?' 
-        : '⏰ Time for a break! You\'ve completed 50 minutes of focused work.'
-      
-      // Play notification sound
-      playNotificationSound('break')
-      
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('Schedule Manager', { body: message })
-      } else if ('Notification' in window && Notification.permission !== 'denied') {
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            new Notification('Schedule Manager', { body: message })
-          }
-        })
-      }
-      
-      alert(message)
-    }
-    
-    const timerDisplay = computed(() => {
-      const mins = String(timerMinutes.value).padStart(2, '0')
-      const secs = String(timerSeconds.value).padStart(2, '0')
-      return `${mins}:${secs}`
+      setInterval(checkDayChange, 60000)
     })
 
 </script>
@@ -873,87 +116,7 @@ import { useScheduleStore } from './stores/store';
     <div max-w-6xl mx-auto>
       <div bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden transition-colors duration-300 class="dark:shadow-gray-900/50">
         <!-- Header -->
-        <div bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-800 p-3 sm:p-4 md:p-6 text-white transition-colors duration-300>
-          <div flex justify-between items-center flex-wrap gap-2 sm:gap-4>
-            <div flex items-center gap-2 sm:gap-3>
-              <svg class="w-6 h-6 sm:w-8 sm:h-8 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              <h1 class="text-xl sm:text-2xl md:text-3xl font-bold">Schedule Manager</h1>
-            </div>
-            <div flex flex-col items-end gap-1 sm:gap-2>
-              <div class="text-xs sm:text-sm opacity-90">Today: {{ todayFormatted }}</div>
-              <div class="text-sm sm:text-lg font-semibold">Time: {{ currentTimeFormatted }}</div>
-            </div>
-          </div>
-          
-          <!-- Pomodoro Timer -->
-          <div class="bg-white/10 mt-3 sm:mt-4 md:mt-6 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4">
-            <div flex items-center justify-between flex-wrap gap-2 sm:gap-4>
-              <div flex items-center gap-2 sm:gap-3>
-                <svg class="w-5 h-5 sm:w-6 sm:h-6 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="12 6 12 12 16 14"/>
-                </svg>
-                <div>
-                  <div class="text-[10px] sm:text-xs opacity-75">{{ isBreakTime ? 'Break Time' : 'Focus Time' }}</div>
-                  <div class="text-2xl sm:text-3xl font-bold font-mono">{{ timerDisplay }}</div>
-                </div>
-              </div>
-              <div flex gap-1 sm:gap-2>
-                <button 
-                  v-if="!isTimerRunning"
-                  @click="startTimer"
-                  class="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center gap-1 sm:gap-2"
-                >
-                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <polygon points="5 3 19 12 5 21 5 3"/>
-                  </svg>
-                  <span class="hidden sm:inline">Start</span>
-                </button>
-                <button 
-                  v-if="isTimerRunning"
-                  @click="pauseTimer"
-                  class="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-amber-500 hover:bg-amber-600 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center gap-1 sm:gap-2"
-                >
-                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <rect x="6" y="4" width="4" height="16"/>
-                    <rect x="14" y="4" width="4" height="16"/>
-                  </svg>
-                  <span class="hidden sm:inline">Pause</span>
-                </button>
-                <button 
-                  @click="resetTimer"
-                  class="px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center gap-1 sm:gap-2"
-                >
-                  <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <polyline points="1 4 1 10 7 10"/>
-                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                  </svg>
-                  <span class="hidden sm:inline">Reset</span>
-                </button>
-              </div>
-            </div>
-            
-            <!-- Next Task Preview -->
-            <div v-if="currentActiveTask || nextTask" class="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-white/20">
-              <div v-if="currentActiveTask" class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm mb-1 sm:mb-2">
-                <span class="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-emerald-500/80 rounded text-white font-semibold text-[10px] sm:text-xs">ACTIVE</span>
-                <span class="opacity-90 truncate">{{ currentActiveTask.time }}</span>
-                <span class="font-medium truncate">{{ currentActiveTask.title }}</span>
-              </div>
-              <div v-if="nextTask" class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
-                <span class="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-500/80 rounded text-white font-semibold text-[10px] sm:text-xs">NEXT</span>
-                <span class="opacity-90 truncate">{{ nextTask.time }}</span>
-                <span class="font-medium truncate">{{ nextTask.title }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        <Header />
         <div p-3 sm:p-4 md:p-6>
           <!-- Calendar View -->
           <div>
@@ -1024,7 +187,7 @@ import { useScheduleStore } from './stores/store';
                   @click="day && handleDateClick(day)"
                     :disabled="!day"
                   :class="[
-                      'min-h-12 sm:min-h-14 md:min-h-16 lg:min-h-20 p-1 sm:p-1.5 md:p-2 rounded-none text-[10px] sm:text-xs md:text-sm font-medium cursor-pointer bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 transition-all relative flex flex-col items-start justify-start border border-gray-200 dark:border-gray-600',
+                      'min-h-12 sm:min-h-14 md:min-h-16 lg:min-h-20 p-1 sm:p-1.5 md:p-2 rounded-lg text-[10px] sm:text-xs md:text-sm font-medium cursor-pointer bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 transition-all relative flex flex-col items-start justify-start border border-gray-200 dark:border-gray-600',
                       {
                         'hover:bg-gray-50 dark:hover:bg-gray-600': day && !isDateDisabled(day),
                         'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500': day && isDateDisabled(day),
