@@ -5,6 +5,7 @@ import '@unocss/reset/tailwind.css'
 import 'uno.css'
 import AuthWrapper from './AuthWrapper.vue'
 import { useAuthStore } from './stores/auth'
+import { registerSW } from 'virtual:pwa-register'
 
 const pinia = createPinia()
 pinia.use(piniaPluginPersistedstate)
@@ -15,5 +16,18 @@ app.use(pinia)
 // Initialize Firebase auth
 const authStore = useAuthStore()
 authStore.initAuth()
+
+// Register PWA Service Worker
+const updateSW = registerSW({
+     onNeedRefresh() {
+          // Show a prompt to the user to refresh the app
+          if (confirm('New content available. Reload to update?')) {
+               updateSW(true)
+          }
+     },
+     onOfflineReady() {
+          console.log('App ready to work offline')
+     },
+})
 
 app.mount('#app')

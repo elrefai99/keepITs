@@ -36,6 +36,15 @@ A powerful, aesthetic **Vue 3 + Vite** schedule and task manager designed for pr
 *   **Responsive Design**: Optimized for Desktop (grid calendars) and Mobile (list views).
 *   **Teams-Style Indicator**: A "current time" red line indicator in Week and Day views.
 
+### Progressive Web App (PWA)
+*   **📱 Installable**: Install the app on any device (desktop or mobile) - works like a native app!
+*   **🔌 Offline Support**: Continue working even without an internet connection.
+*   **🔄 Auto-Updates**: Automatically updates to the latest version with user notification.
+*   **⚡ Fast Performance**: Lightning-fast load times with intelligent caching.
+*   **📲 Cross-Platform**: Works on Windows, Mac, Linux, iOS, and Android.
+
+> 📖 **[Read full PWA documentation](./PWA.md)** for installation instructions and technical details.
+
 ## Tech Stack
 
 *   **Frontend**: [Vue 3](https://vuejs.org/) (Composition API), [TypeScript](https://www.typescriptlang.org/), [Vite](https://vitejs.dev/)

@@ -11,12 +11,9 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    Calendar: typeof import('./src/components/calendar.vue')['default']
     Darkmode: typeof import('./src/components/darkmode.vue')['default']
-    Google: typeof import('./src/components/google.vue')['default']
     Header: typeof import('./src/components/header.vue')['default']
     Login: typeof import('./src/components/Login.vue')['default']
     Navbar: typeof import('./src/components/navbar.vue')['default']
-    SettingsModal: typeof import('./src/components/SettingsModal.vue')['default']
   }
 }
