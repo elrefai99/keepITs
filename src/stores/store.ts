@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { useAuthStore } from './auth'
-import { saveTask, getTasksForDate, deleteTask as deleteTaskFromFirebase, getAllUserTasks } from '../firebase/tasks'
+import { saveTask, getTasksForDate, deleteTask as deleteTaskFromFirebase, getAllUserTasks, addDaysToDate } from '../firebase/tasks'
 
 export const useScheduleStore = defineStore('schedule', {
      state: () => ({
@@ -12,6 +12,28 @@ export const useScheduleStore = defineStore('schedule', {
      getters: {
           getTasksForDate: (state) => (dateKey: string) => {
                return state.schedules[dateKey] || []
+          },
+
+          /** Returns all tasks that span across a given date (multi-day tasks included) */
+          getTasksSpanningDate: (state) => (dateKey: string) => {
+               const results: any[] = []
+               const allDates = Object.keys(state.schedules)
+               for (const dk of allDates) {
+                    for (const task of state.schedules[dk]) {
+                         // already stored on this date
+                         if (dk === dateKey) {
+                              if (!results.find(t => t.id === task.id)) results.push(task)
+                              continue
+                         }
+                         // multi-day: startDate <= dateKey <= endDate
+                         if (task.startDate && task.endDate && task.durationDays && task.durationDays > 1) {
+                              if (task.startDate <= dateKey && task.endDate >= dateKey) {
+                                   if (!results.find(t => t.id === task.id)) results.push(task)
+                              }
+                         }
+                    }
+               }
+               return results
           }
      },
 
@@ -29,7 +51,6 @@ export const useScheduleStore = defineStore('schedule', {
                          if (!this.schedules[task.date]) {
                               this.schedules[task.date] = []
                          }
-                         // Ensure order field exists, default to array index if not
                          if (task.order === undefined) {
                               task.order = this.schedules[task.date].length
                          }
@@ -42,7 +63,7 @@ export const useScheduleStore = defineStore('schedule', {
                               if (a.order !== undefined && b.order !== undefined) {
                                    return a.order - b.order
                               }
-                              return a.time.localeCompare(b.time)
+                              return (a.time || '').localeCompare(b.time || '')
                          })
                     })
 
@@ -69,18 +90,31 @@ export const useScheduleStore = defineStore('schedule', {
           async addTask(dateKey: string, task: any) {
                const authStore = useAuthStore()
 
+               // Calculate endDate from durationDays
+               const durationDays = task.durationDays || 1
+               const startDate = dateKey
+               const endDate = durationDays > 1
+                    ? addDaysToDate(startDate, durationDays - 1)
+                    : startDate
+
                const newTask = {
                     id: Date.now().toString(),
                     ...task,
                     date: dateKey,
+                    startDate,
+                    endDate,
+                    durationDays,
                     order: (this.schedules[dateKey]?.length || 0)
                }
 
                if (!this.schedules[dateKey]) {
                     this.schedules[dateKey] = []
                }
-               this.schedules[dateKey].push(newTask)
+               // Insert at position 0 so new task shows at the top of today's tasks
+               this.schedules[dateKey].unshift(newTask)
 
+               // Re-assign order values after unshift
+               this.schedules[dateKey].forEach((t, i) => { t.order = i })
 
                if (authStore.user) {
                     try {
@@ -98,8 +132,19 @@ export const useScheduleStore = defineStore('schedule', {
                if (this.schedules[dateKey]) {
                     const index = this.schedules[dateKey].findIndex(t => t.id === task.id)
                     if (index !== -1) {
-                         // Merge updates
-                         const updatedTask = { ...this.schedules[dateKey][index], ...task }
+                         // Recalculate endDate if durationDays changed
+                         const durationDays = task.durationDays || this.schedules[dateKey][index].durationDays || 1
+                         const startDate = task.startDate || dateKey
+                         const endDate = durationDays > 1
+                              ? addDaysToDate(startDate, durationDays - 1)
+                              : startDate
+
+                         const updatedTask = {
+                              ...this.schedules[dateKey][index],
+                              ...task,
+                              durationDays,
+                              endDate
+                         }
                          this.schedules[dateKey][index] = updatedTask
 
                          if (authStore.user) {
@@ -162,20 +207,17 @@ export const useScheduleStore = defineStore('schedule', {
 
                if (!this.schedules[dateKey]) return
 
-               // Reorder tasks based on the new order
                const tasksMap = new Map(this.schedules[dateKey].map(t => [t.id, t]))
                const reorderedTasks = taskIds
                     .map(id => tasksMap.get(id))
                     .filter(Boolean) as any[]
 
-               // Update order field
                reorderedTasks.forEach((task, index) => {
                     task.order = index
                })
 
                this.schedules[dateKey] = reorderedTasks
 
-               // Save all reordered tasks to Firebase
                if (authStore.user) {
                     try {
                          await Promise.all(

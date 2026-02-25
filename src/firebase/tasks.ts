@@ -14,9 +14,16 @@ import { db } from './config'
 export interface Task {
      id: string
      title: string
-     time: string
+     // Time fields (optional for all-day / multi-day tasks)
+     time: string       // start time e.g. "09:00"
+     endTime?: string   // end time e.g. "17:00" (within a day)
+     // Duration fields
+     durationDays?: number   // number of days (1 = single day, 4 = 4 days)
+     startDate: string       // YYYY-MM-DD  (primary date / anchor)
+     endDate?: string        // YYYY-MM-DD  auto-calculated from startDate + durationDays
      description: string
      completed: boolean
+     // Keep `date` as the primary Firestore lookup key (= startDate)
      date: string
      userId: string
      order?: number
@@ -27,7 +34,21 @@ export interface Task {
      updatedAt?: any
 }
 
-// Save task to Firestore
+// ── helpers ────────────────────────────────────────────────────────────────────
+
+/** Add N calendar days to a YYYY-MM-DD string and return the new string */
+export const addDaysToDate = (dateStr: string, days: number): string => {
+     const d = new Date(dateStr + 'T00:00:00')
+     d.setDate(d.getDate() + days)
+     const y = d.getFullYear()
+     const m = String(d.getMonth() + 1).padStart(2, '0')
+     const day = String(d.getDate()).padStart(2, '0')
+     return `${y}-${m}-${day}`
+}
+
+// ── CRUD ───────────────────────────────────────────────────────────────────────
+
+/** Save (create or update) a task.  The Firestore document id is based on userId + startDate + taskId. */
 export const saveTask = async (userId: string, dateKey: string, task: Omit<Task, 'userId' | 'date'>) => {
      try {
           const taskRef = doc(db, 'tasks', `${userId}_${dateKey}_${task.id}`)
@@ -35,6 +56,7 @@ export const saveTask = async (userId: string, dateKey: string, task: Omit<Task,
           const taskData: Task = {
                ...task,
                date: dateKey,
+               startDate: task.startDate || dateKey,
                userId,
                updatedAt: serverTimestamp()
           }
@@ -45,7 +67,6 @@ export const saveTask = async (userId: string, dateKey: string, task: Omit<Task,
           }
 
           await setDoc(taskRef, taskData, { merge: true })
-
           return taskData
      } catch (error) {
           console.error('Error saving task:', error)
@@ -53,7 +74,7 @@ export const saveTask = async (userId: string, dateKey: string, task: Omit<Task,
      }
 }
 
-// Get all tasks for a user on a specific date
+/** Get all tasks for a user on a specific date (single-day query by `date` field) */
 export const getTasksForDate = async (userId: string, dateKey: string): Promise<Task[]> => {
      try {
           const tasksRef = collection(db, 'tasks')
@@ -62,14 +83,11 @@ export const getTasksForDate = async (userId: string, dateKey: string): Promise<
                where('userId', '==', userId),
                where('date', '==', dateKey)
           )
-
           const querySnapshot = await getDocs(q)
           const tasks: Task[] = []
-
           querySnapshot.forEach((doc) => {
                tasks.push(doc.data() as Task)
           })
-
           return tasks
      } catch (error) {
           console.error('Error getting tasks:', error)
@@ -77,7 +95,7 @@ export const getTasksForDate = async (userId: string, dateKey: string): Promise<
      }
 }
 
-// Delete task from Firestore
+/** Delete task from Firestore */
 export const deleteTask = async (userId: string, dateKey: string, taskId: string) => {
      try {
           const taskRef = doc(db, 'tasks', `${userId}_${dateKey}_${taskId}`)
@@ -88,19 +106,16 @@ export const deleteTask = async (userId: string, dateKey: string, taskId: string
      }
 }
 
-// Get all tasks for a user
+/** Get ALL tasks for a user (used on initial load) */
 export const getAllUserTasks = async (userId: string): Promise<Task[]> => {
      try {
           const tasksRef = collection(db, 'tasks')
           const q = query(tasksRef, where('userId', '==', userId))
-
           const querySnapshot = await getDocs(q)
           const tasks: Task[] = []
-
           querySnapshot.forEach((doc) => {
                tasks.push(doc.data() as Task)
           })
-
           return tasks
      } catch (error) {
           console.error('Error getting all tasks:', error)

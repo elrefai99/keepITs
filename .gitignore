@@ -30,3 +30,5 @@ coverage
 *.tsbuildinfo
 .env
 .env.dev
+sw.js
+workbox-c28420ab.js

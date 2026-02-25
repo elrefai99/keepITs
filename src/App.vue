@@ -12,21 +12,39 @@ import { useDragDrop } from './shared/useDragDrop'
     const store = useScheduleStore()
     
     // Calendar Logic
-    const {todayFormatted,currentDate,selectedDate,calendarView,weekCalendarDays,displayedCalendarDays,calendarTitle,changeMonth,handleDateClick: calendarHandleDateClick,timeSlots} = useCalendar()
+    const {todayFormatted,selectedDate,calendarView,weekCalendarDays,displayedCalendarDays,calendarTitle,changeMonth,handleDateClick: calendarHandleDateClick,timeSlots} = useCalendar()
 
     // Time State
     const currentTime = ref(new Date())
     
     // Task Logic
-    const {showAddForm,editingTaskId,showTodoList,newTask,currentTasks,categorizedTasks,nextTask,currentActiveTask,handleAddTask,handleEditTask,toggleComplete,deleteTaskItem,openGoogleCalendarForTask,checkAndCompletePassedTasks,isCurrentTask,isNextTask} = useTaskLogic(store, selectedDate, todayFormatted, currentTime)
+    const {showAddForm,editingTaskId,showTodoList,newTask,endDatePreview,currentTasks,categorizedTasks,currentActiveTask,handleAddTask,handleEditTask,toggleComplete,deleteTaskItem,openGoogleCalendarForTask,checkAndCompletePassedTasks,isCurrentTask,isNextTask} = useTaskLogic(store, selectedDate, todayFormatted, currentTime)
+
+    // Calendar popup for day/week view header
+    const showCalendarPopup = ref(false)
+    const popupDate = ref(new Date())
+    const monthNames2 = ['January','February','March','April','May','June','July','August','September','October','November','December']
+    const popupCalendarDays = computed(() => {
+      const year = popupDate.value.getFullYear()
+      const month = popupDate.value.getMonth()
+      const firstDay = new Date(year, month, 1)
+      const daysInMonth = new Date(year, month + 1, 0).getDate()
+      const days: (Date | null)[] = []
+      for (let i = 0; i < firstDay.getDay(); i++) days.push(null)
+      for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i))
+      return days
+    })
+    const popupMonthTitle = computed(() => `${monthNames2[popupDate.value.getMonth()]} ${popupDate.value.getFullYear()}`)
+    const changePopupMonth = (d: number) => { popupDate.value = new Date(popupDate.value.getFullYear(), popupDate.value.getMonth() + d, 1) }
+    const selectPopupDate = (date: Date) => { calendarHandleDateClick(date); showAddForm.value = false; showCalendarPopup.value = false }
 
     // Timer Logic
     const triggerNotification = ref(() => {})
     const onTimerComplete = () => {triggerNotification.value()}
     
-    const {timerMinutes,timerSeconds,isTimerRunning,isBreakTime,timerDisplay,startTimer,pauseTimer,resetTimer,stopTimer} = useTimer(currentActiveTask, onTimerComplete)
+    const {isBreakTime} = useTimer(currentActiveTask, onTimerComplete)
     
-    const {notifiedTasks,checkUpcomingTasks,checkDayChange,showNotification} = useNotifications(store, todayFormatted, isBreakTime)
+    const {checkUpcomingTasks,checkDayChange,showNotification} = useNotifications(store, todayFormatted, isBreakTime)
     
     // Assign the real function
     triggerNotification.value = showNotification
@@ -73,22 +91,25 @@ import { useDragDrop } from './shared/useDragDrop'
 
     const getAllTasksForDay = (date: Date) => {
       const dateKey = formatDate(date)
-      return store.getTasksForDate(dateKey).sort((a: any, b: any) => a.time.localeCompare(b.time))
+      return store.getTasksSpanningDate(dateKey).sort((a: any, b: any) => (a.time||'').localeCompare(b.time||''))
+    }
+
+    const getMultiDayLabel = (task: any, dateKey: string): string => {
+      if (!task.durationDays || task.durationDays <= 1) return ''
+      const start = new Date(task.startDate + 'T00:00:00')
+      const cur = new Date(dateKey + 'T00:00:00')
+      const diff = Math.round((cur.getTime() - start.getTime()) / 86400000) + 1
+      return `Day ${diff}/${task.durationDays}`
     }
 
     const getTaskCountForDate = (date: Date) => {
       const dateKey = formatDate(date)
-      return store.getTasksForDate(dateKey).length
+      return store.getTasksSpanningDate(dateKey).length
     }
 
     const getMeetingCountForDate = (date: Date) => {
       const dateKey = formatDate(date)
-      return store.getTasksForDate(dateKey).filter((task: any) => task.meetingUrl).length
-    }
-    
-    const hasTasksOnDate = (date: Date) => {
-      const dateKey = formatDate(date)
-      return store.getTasksForDate(dateKey).length > 0
+      return store.getTasksSpanningDate(dateKey).filter((task: any) => task.meetingUrl).length
     }
     
     // Lifecycle
@@ -107,6 +128,12 @@ import { useDragDrop } from './shared/useDragDrop'
       
       setInterval(checkDayChange, 60000)
     })
+
+    // Split description text into bullet lines for display
+    const descLines = (desc: string): string[] => {
+      if (!desc) return []
+      return desc.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    }
 
 </script>
 
@@ -163,8 +190,13 @@ import { useDragDrop } from './shared/useDragDrop'
                     <polyline points="15 18 9 12 15 6"/>
                   </svg>
                 </button>
-                  <h2 class="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-gray-800 dark:text-gray-100 text-center flex-1 sm:flex-none min-w-0 truncate sm:min-w-fit">
+                  <h2
+                    class="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-gray-800 dark:text-gray-100 text-center flex-1 sm:flex-none min-w-0 truncate sm:min-w-fit cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    @click="calendarView !== 'month' && (showCalendarPopup = !showCalendarPopup)"
+                    :title="calendarView !== 'month' ? 'Click to open mini calendar' : ''"
+                  >
                     {{ calendarTitle }}
+                    <span v-if="calendarView !== 'month'" class="ml-1 text-xs text-blue-500 dark:text-blue-400 font-normal">(click to navigate)</span>
                   </h2>
                   <button @click="changeMonth(1)" class="bg-transparent border-none p-1.5 sm:p-2 cursor-pointer rounded-lg transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 flex-shrink-0">
                     <svg class="w-4 h-4 sm:w-5 sm:h-5 stroke-2 text-gray-800 dark:text-gray-200" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -277,15 +309,13 @@ import { useDragDrop } from './shared/useDragDrop'
                 </div>
 
                 <div class="flex overflow-x-auto bg-white dark:bg-gray-800">
-                  <div class="w-14 sm:w-16 md:w-20 lg:w-24 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                  <div class="w-16 sm:w-20 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
                     <div
                       v-for="hour in timeSlots"
                       :key="hour"
-                      class="h-12 sm:h-14 md:h-16 lg:h-20 border-b border-gray-200 dark:border-gray-700 relative"
+                      class="h-12 sm:h-14 md:h-16 lg:h-20 border-b border-gray-100 dark:border-gray-700/60 relative flex items-start justify-end pr-3"
                     >
-                      <div class="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400 absolute top-0 right-1 sm:right-2 pr-1 sm:pr-2 -mt-2.5 sm:-mt-3">
-                        {{ formatHour(hour) }}
-                      </div>
+                      <span class="text-[10px] sm:text-xs font-medium text-gray-400 dark:text-gray-500 leading-none select-none whitespace-nowrap" style="margin-top:-0.5em">{{ formatHour(hour) }}</span>
                     </div>
                   </div>
                   <div class="flex-1 grid grid-cols-7 min-w-[600px] sm:min-w-0">
@@ -349,6 +379,7 @@ import { useDragDrop } from './shared/useDragDrop'
                         >
                           <div class="font-bold truncate mb-0.5">{{ task.time }} - {{ task.endTime || '...' }}</div>
                           <div class="truncate font-semibold">{{ task.title }}</div>
+                          <div v-if="getMultiDayLabel(task, formatDate(day))" class="text-[8px] bg-white/30 rounded px-1 mt-0.5 inline-block font-bold">{{ getMultiDayLabel(task, formatDate(day)) }}</div>
                           <div v-if="task.description" class="text-[8px] sm:text-[9px] opacity-80 truncate mt-0.5 hidden sm:block">
                             {{ task.description }}
                           </div>
@@ -391,15 +422,13 @@ import { useDragDrop } from './shared/useDragDrop'
                 </div>
 
                 <div v-if="selectedDate" class="flex overflow-x-auto bg-white dark:bg-gray-800">
-                  <div class="w-14 sm:w-16 md:w-20 lg:w-24 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                  <div class="w-16 sm:w-20 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
                     <div
                       v-for="hour in timeSlots"
                       :key="hour"
-                      class="h-12 sm:h-14 md:h-16 lg:h-20 border-b border-gray-200 dark:border-gray-700 relative"
+                      class="h-12 sm:h-14 md:h-16 lg:h-20 border-b border-gray-100 dark:border-gray-700/60 relative flex items-start justify-end pr-3"
                     >
-                      <div class="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400 absolute top-0 right-1 sm:right-2 pr-1 sm:pr-2 -mt-2.5 sm:-mt-3">
-                        {{ formatHour(hour) }}
-                      </div>
+                      <span class="text-[10px] sm:text-xs font-medium text-gray-400 dark:text-gray-500 leading-none select-none whitespace-nowrap" style="margin-top:-0.5em">{{ formatHour(hour) }}</span>
                     </div>
                   </div>
                   <div 
@@ -465,6 +494,7 @@ import { useDragDrop } from './shared/useDragDrop'
                         </div>
                       </div>
                       <div class="font-bold text-sm sm:text-base md:text-lg mb-1 truncate">{{ task.title }}</div>
+                      <div v-if="selectedDate && getMultiDayLabel(task, formatDate(selectedDate))" class="inline-block text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold mb-1">{{ getMultiDayLabel(task, formatDate(selectedDate)) }}</div>
                       <div v-if="task.description" class="text-[10px] sm:text-xs md:text-sm opacity-90 line-clamp-2">
                         {{ task.description }}
                       </div>
@@ -630,9 +660,12 @@ import { useDragDrop } from './shared/useDragDrop'
                         </div>
 
                         <!-- Card Description -->
-                        <p v-if="task.description" class="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 break-words line-clamp-2">
-                          {{ task.description }}
-                        </p>
+                        <div v-if="task.description" class="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2">
+                          <div v-for="(line, i) in descLines(task.description)" :key="i" class="flex items-start gap-1">
+                            <span class="text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0">•</span>
+                            <span class="break-words">{{ line }}</span>
+                          </div>
+                        </div>
 
                         <!-- Card Footer -->
                         <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
@@ -780,7 +813,13 @@ import { useDragDrop } from './shared/useDragDrop'
                         </span>
                       </div>
                       <h3 :class="['text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 mb-1 break-words', { 'line-through': task.completed }]">{{ task.title }}</h3>
-                      <p v-if="task.description" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 break-words">{{ task.description }}</p>
+                      <div v-if="selectedDate && getMultiDayLabel(task, formatDate(selectedDate))" class="inline-block text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700 px-1.5 py-0.5 rounded font-bold mb-1">{{ getMultiDayLabel(task, formatDate(selectedDate)) }}</div>
+                      <div v-if="task.description" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        <div v-for="(line, i) in descLines(task.description)" :key="i" class="flex items-start gap-1">
+                          <span class="text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0">•</span>
+                          <span class="break-words">{{ line }}</span>
+                        </div>
+                      </div>
 
                       <div v-if="task.meetingUrl" class="mt-2 flex items-center gap-2">
                         <span
@@ -859,101 +898,110 @@ import { useDragDrop } from './shared/useDragDrop'
   <!-- Add Task Modal -->
   <div
     v-if="showAddForm && selectedDate && !isDateDisabled(selectedDate)"
-    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4"
     @click.self="() => { showAddForm = false; editingTaskId = null; }"
   >
-    <div class="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl md:rounded-2xl shadow-2xl w-full max-w-md p-3 sm:p-4 md:p-6 max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
-      <div class="flex justify-between items-center mb-2 sm:mb-3 md:mb-4">
-        <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800 dark:text-gray-100 pr-2">
-          {{ editingTaskId ? 'Edit Task' : 'Add Task' }} – {{ formatDate(selectedDate) }}
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg p-4 sm:p-6 max-h-[95vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-base sm:text-lg font-bold text-gray-800 dark:text-gray-100">
+          {{ editingTaskId ? 'Edit Task' : 'New Task' }} — {{ formatDate(selectedDate) }}
         </h3>
-        <button
-          @click="() => { showAddForm = false; editingTaskId = null; }"
-          class="bg-transparent border-none text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer text-lg sm:text-xl md:text-2xl leading-none flex-shrink-0"
-        >
-          ✕
-        </button>
+        <button @click="() => { showAddForm = false; editingTaskId = null; }" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:text-gray-800 dark:hover:text-white cursor-pointer text-lg border-none">✕</button>
       </div>
-
-      <div>
-        <input
-          v-model="newTask.title"
-          type="text"
-          placeholder="Task title"
-          class="w-full p-2.5 sm:p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-2 sm:mb-3 font-sans text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
-        />
-        <input
-          v-model="newTask.time"
-          type="time"
-          class="w-full p-2.5 sm:p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-2 sm:mb-3 font-sans text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors"
-        />
-        <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">To:</div>
-        <input
-          v-model="newTask.endTime"
-          type="time"
-          class="w-full p-2.5 sm:p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-2 sm:mb-3 font-sans text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors"
-        />
-        <textarea
-          v-model="newTask.description"
-          placeholder="Description (optional)"
-          class="w-full p-2.5 sm:p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg mb-2 sm:mb-3 font-sans text-sm resize-none focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
-          rows="3"
-        ></textarea>
-        <div class="mb-2 sm:mb-3">
-          <label class="block text-xs sm:text-sm font-medium text-gray-200 mb-1">Meeting</label>
-          <div class="flex flex-col gap-2">
-            <select
-              v-model="newTask.meetingType"
-              class="w-full p-2.5 sm:p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors"
-            >
-              <option value="none">No meeting</option>
-              <option value="google">Google Meet</option>
-              <option value="teams">Microsoft Teams</option>
-              <option value="custom">Other link</option>
-            </select>
-            <input
-              v-if="newTask.meetingType !== 'none'"
-              v-model="newTask.meetingUrl"
-              type="url"
-              placeholder="Paste meeting link (e.g. Google Meet or Teams)"
-              class="w-full p-2.5 sm:p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-xs sm:text-sm focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
-            />
-            <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
-              <input
-                v-model="newTask.guestEmailsText"
-                type="text"
-                placeholder="Guest emails (comma separated)"
-                class="w-full sm:flex-1 p-2.5 sm:p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-[10px] sm:text-xs focus:outline-none focus:border-blue-600 dark:focus:border-blue-400 focus:ring-2 sm:focus:ring-3 focus:ring-blue-600/10 dark:focus:ring-blue-400/20 transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500"
-              />
-              <button
-                type="button"
-                @click="openGoogleCalendarForTask"
-                class="px-2.5 sm:px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] sm:text-xs font-medium border-none cursor-pointer flex items-center gap-1"
-              >
-                <svg class="w-3.5 h-3.5 stroke-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                Google Calendar
-              </button>
-            </div>
-            <p class="mt-1 text-[10px] sm:text-xs text-gray-400">
-              This opens Google Calendar with this meeting pre-filled so you can send email invites.
-            </p>
+      <div class="flex flex-col gap-3">
+        <input v-model="newTask.title" type="text" placeholder="Task title *" class="w-full p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors placeholder:text-gray-400" />
+        <!-- Duration Days -->
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-3">
+          <label class="block text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2 uppercase tracking-wide">Duration (days)</label>
+          <div class="flex items-center gap-2">
+            <button type="button" @click="newTask.durationDays = Math.max(1, (newTask.durationDays || 1) - 1)" class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-lg font-bold border-none cursor-pointer hover:bg-blue-700">−</button>
+            <input v-model.number="newTask.durationDays" type="number" min="1" max="365" class="w-14 text-center p-1.5 border border-blue-300 dark:border-blue-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm font-bold focus:outline-none focus:border-blue-500" />
+            <button type="button" @click="newTask.durationDays = (newTask.durationDays || 1) + 1" class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-lg font-bold border-none cursor-pointer hover:bg-blue-700">+</button>
+            <span class="text-sm text-blue-700 dark:text-blue-300 font-medium">{{ newTask.durationDays === 1 ? 'day (single)' : 'days' }}</span>
+          </div>
+          <div v-if="endDatePreview" class="mt-2 flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
+            <span class="font-semibold">Start: {{ formatDate(selectedDate) }}</span>
+            <span>→</span>
+            <span class="font-semibold">End: {{ endDatePreview }}</span>
+            <span class="bg-blue-600 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">{{ newTask.durationDays }} days</span>
           </div>
         </div>
-        <div class="flex gap-2 mt-2">
-          <button @click="handleAddTask" class="flex-1 p-2.5 sm:p-3 border-none rounded-lg cursor-pointer text-sm sm:text-base font-medium transition-all bg-emerald-500 dark:bg-emerald-600 text-white hover:bg-emerald-600 dark:hover:bg-emerald-700">
-            {{ editingTaskId ? 'Update' : 'Save' }}
+        <!-- Time Range -->
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
+          <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Time Range</label>
+          <div class="flex items-center gap-2">
+            <div class="flex-1">
+              <div class="text-[10px] text-gray-400 mb-1">Start</div>
+              <input v-model="newTask.time" type="time" class="w-full p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+            </div>
+            <div class="text-gray-400 text-xl mt-4">→</div>
+            <div class="flex-1">
+              <div class="text-[10px] text-gray-400 mb-1">End</div>
+              <input v-model="newTask.endTime" type="time" class="w-full p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Description</label>
+          <div class="text-[10px] text-gray-400 dark:text-gray-500 mb-1">Each line becomes a bullet point</div>
+          <textarea
+            v-model="newTask.description"
+            placeholder="- Enter each point on a new line"
+            class="w-full p-3 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-xl text-sm resize-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors placeholder:text-gray-400 font-mono"
+            rows="3"
+            @keydown.enter.prevent="newTask.description = newTask.description + '\n• '"
+          ></textarea>
+        </div>
+        <!-- Meeting -->
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
+          <label class="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wide">Meeting</label>
+          <select v-model="newTask.meetingType" class="w-full p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors">
+            <option value="none">No meeting</option>
+            <option value="google">Google Meet</option>
+            <option value="teams">Microsoft Teams</option>
+            <option value="custom">Other link</option>
+          </select>
+          <div v-if="newTask.meetingType !== 'none'" class="flex flex-col gap-2 mt-2">
+            <input v-model="newTask.meetingUrl" type="url" placeholder="Paste meeting link" class="w-full p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-xs focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+            <div class="flex gap-2">
+              <input v-model="newTask.guestEmailsText" type="text" placeholder="Guest emails (comma separated)" class="flex-1 p-2.5 border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 rounded-lg text-xs focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+              <button type="button" @click="openGoogleCalendarForTask" class="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium border-none cursor-pointer whitespace-nowrap">Google Cal</button>
+            </div>
+          </div>
+        </div>
+        <!-- Actions -->
+        <div class="flex gap-2 mt-1">
+          <button @click="handleAddTask" class="flex-1 p-3 border-none rounded-xl cursor-pointer text-sm font-bold transition-all bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/30">
+            {{ editingTaskId ? 'Update Task' : 'Add Task' }}
           </button>
-          <button @click="() => { showAddForm = false; editingTaskId = null; }" class="flex-1 p-2.5 sm:p-3 border-none rounded-lg cursor-pointer text-sm sm:text-base font-medium transition-all bg-gray-200 dark:bg-gray-500 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-400">
-            Cancel
-          </button>
+          <button @click="() => { showAddForm = false; editingTaskId = null; }" class="flex-1 p-3 border-none rounded-xl cursor-pointer text-sm font-medium transition-all bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-500">Cancel</button>
         </div>
       </div>
     </div>
   </div>
-</template>
 
+  <!-- Calendar Mini Popup (for day/week view navigation) -->
+  <div v-if="showCalendarPopup" class="fixed inset-0 bg-black/40 flex items-start justify-center z-40 pt-16 sm:pt-20" @click.self="showCalendarPopup = false">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-72 p-4 border border-gray-200 dark:border-gray-700">
+      <div class="flex items-center justify-between mb-3">
+        <button @click="changePopupMonth(-1)" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-none bg-transparent">
+          <svg class="w-4 h-4 text-gray-600 dark:text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span class="text-sm font-bold text-gray-800 dark:text-gray-100">{{ popupMonthTitle }}</span>
+        <button @click="changePopupMonth(1)" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-none bg-transparent">
+          <svg class="w-4 h-4 text-gray-600 dark:text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div class="grid grid-cols-7 mb-1">
+        <div v-for="d in ['S','M','T','W','T','F','S']" :key="d" class="text-center text-[10px] font-semibold text-gray-400 py-1">{{ d }}</div>
+      </div>
+      <div class="grid grid-cols-7 gap-0.5">
+        <template v-for="(day, i) in popupCalendarDays" :key="i">
+          <button v-if="day" @click="selectPopupDate(day)" :class="['w-full aspect-square rounded-lg text-xs font-medium transition-colors border-none cursor-pointer', formatDate(day) === todayFormatted ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200', selectedDate && formatDate(day) === formatDate(selectedDate) ? 'ring-2 ring-blue-500' : '']">{{ day.getDate() }}</button>
+          <div v-else class="w-full aspect-square"></div>
+        </template>
+      </div>
+      <button @click="selectPopupDate(new Date())" class="w-full mt-3 p-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg cursor-pointer border border-blue-200 dark:border-blue-700 bg-transparent transition-colors">Go to Today</button>
+    </div>
+  </div>
+</template>

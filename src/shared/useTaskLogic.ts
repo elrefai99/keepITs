@@ -1,11 +1,13 @@
 import { ref, computed } from 'vue'
 import { formatDate, getMinutesFromTime, getCurrentTimeString, isDateDisabled } from '../utils/dateUtils'
+import { addDaysToDate } from '../firebase/tasks'
 
 export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any, currentTime: any) {
      const showAddForm = ref(false)
      const editingTaskId = ref<string | null>(null)
      const showTodoList = ref(true)
-     const newTask = ref<any>({
+
+     const defaultNewTask = () => ({
           title: '',
           time: '09:00',
           endTime: '10:00',
@@ -13,31 +15,43 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           completed: false,
           meetingType: 'none',
           meetingUrl: '',
-          guestEmailsText: ''
+          guestEmailsText: '',
+          durationDays: 1,       // ← new: how many days this task spans
+          useTimeRange: true      // ← new: toggle between time range and all-day
      })
 
-     // Get current tasks for selected date
+     const newTask = ref<any>(defaultNewTask())
+
+     // Computed end date preview when durationDays > 1
+     const endDatePreview = computed(() => {
+          if (!selectedDate.value) return ''
+          const days = Number(newTask.value.durationDays) || 1
+          if (days <= 1) return ''
+          const startStr = formatDate(selectedDate.value)
+          return addDaysToDate(startStr, days - 1)
+     })
+
+     // Get current tasks for selected date (including multi-day tasks that span this date)
      const currentTasks = computed(() => {
           if (!selectedDate.value) return []
           const dateKey = formatDate(selectedDate.value)
-          const tasks = store.getTasksForDate(dateKey)
+          const tasks = store.getTasksSpanningDate(dateKey)
           // Sort by order first, then by time
           return tasks.sort((a: any, b: any) => {
                if (a.order !== undefined && b.order !== undefined) {
                     return a.order - b.order
                }
-               return a.time.localeCompare(b.time)
+               return (a.time || '').localeCompare(b.time || '')
           })
      })
 
-     // Categorize tasks for todo list
+     // Categorize tasks for kanban board
      const categorizedTasks = computed(() => {
           if (!selectedDate.value) return { workedOn: [], willStart: [], ended: [] }
 
           const dateKey = formatDate(selectedDate.value)
           const isToday = dateKey === todayFormatted.value
           const tasks = currentTasks.value
-          // Use currentTime from ref passed in
           const currentTimeStr = getCurrentTimeString(currentTime.value)
           const currentMinutes = getMinutesFromTime(currentTimeStr)
 
@@ -46,14 +60,19 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           const ended: any[] = []
 
           tasks.forEach((task: any) => {
-               const startMinutes = getMinutesFromTime(task.time)
-               // Default duration 1 hour if endTime not present
+               // Multi-day task: if it spans multiple days, treat as whole-day 'willStart' on non-start dates
+               if (task.durationDays && task.durationDays > 1 && task.startDate !== dateKey) {
+                    if (task.completed) ended.push(task)
+                    else willStart.push(task)
+                    return
+               }
+
+               const startMinutes = task.time ? getMinutesFromTime(task.time) : 0
                const endMinutes = task.endTime ? getMinutesFromTime(task.endTime) : startMinutes + 60
 
                if (task.completed) {
                     ended.push(task)
                } else if (isToday) {
-                    // Check range
                     if (currentMinutes > endMinutes) {
                          ended.push(task)
                     } else if (currentMinutes >= startMinutes && currentMinutes <= endMinutes) {
@@ -62,7 +81,6 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
                          willStart.push(task)
                     }
                } else {
-                    // For future dates, all non-completed tasks are "will start"
                     willStart.push(task)
                }
           })
@@ -70,36 +88,33 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           return { workedOn, willStart, ended }
      })
 
-     // Get next upcoming task for today
      const nextTask = computed(() => {
           const dateKey = todayFormatted.value
           const tasks = store.getTasksForDate(dateKey)
                .filter((task: any) => !task.completed)
-               .sort((a: any, b: any) => a.time.localeCompare(b.time))
+               .sort((a: any, b: any) => (a.time || '').localeCompare(b.time || ''))
 
           const currentTimeStr = getCurrentTimeString(currentTime.value)
-          return tasks.find((task: any) => task.time > currentTimeStr) || null
+          return tasks.find((task: any) => task.time && task.time > currentTimeStr) || null
      })
 
-     // Get current active task (task whose time has started but not yet completed)
      const currentActiveTask = computed(() => {
           const dateKey = todayFormatted.value
           const tasks = store.getTasksForDate(dateKey)
                .filter((task: any) => !task.completed)
-               .sort((a: any, b: any) => a.time.localeCompare(b.time))
+               .sort((a: any, b: any) => (a.time || '').localeCompare(b.time || ''))
 
           const currentTimeStr = getCurrentTimeString(currentTime.value)
           const currentMinutes = getMinutesFromTime(currentTimeStr)
 
-          // Find task where current time is within range
           return tasks.find((task: any) => {
+               if (!task.time) return false
                const startMinutes = getMinutesFromTime(task.time)
                const endMinutes = task.endTime ? getMinutesFromTime(task.endTime) : startMinutes + 60
                return currentMinutes >= startMinutes && currentMinutes <= endMinutes
           }) || null
      })
 
-     // Auto-complete tasks when their time has passed
      const checkAndCompletePassedTasks = () => {
           const dateKey = todayFormatted.value
           const tasks = store.getTasksForDate(dateKey)
@@ -107,11 +122,9 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           const currentMinutes = getMinutesFromTime(currentTimeStr)
 
           tasks.forEach((task: any) => {
-               if (!task.completed) {
+               if (!task.completed && task.time) {
                     const startMinutes = getMinutesFromTime(task.time)
                     const endMinutes = task.endTime ? getMinutesFromTime(task.endTime) : startMinutes + 60
-
-                    // Auto-complete if time is past end time + buffer (e.g. 1 minute)
                     if (currentMinutes > endMinutes) {
                          store.toggleTaskComplete(dateKey, task.id)
                     }
@@ -129,42 +142,31 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
                .map((e: string) => e.trim())
                .filter((e: string) => e.length > 0)
 
-          if (editingTaskId.value) {
-               // Update existing task
-               store.updateTask(dateKey, {
-                    id: editingTaskId.value,
-                    ...newTask.value,
-                    guestEmails: guests,
-                    endTime: newTask.value.endTime || (() => {
-                         const [h, m] = newTask.value.time.split(':').map(Number)
-                         const endH = (h + 1) % 24
-                         return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-                    })()
-               })
-          } else {
-               // Create new task
-               store.addTask(dateKey, {
-                    ...newTask.value,
-                    guestEmails: guests,
-                    // Ensure endTime is set, default to 1 hour after time if needed
-                    endTime: newTask.value.endTime || (() => {
-                         const [h, m] = newTask.value.time.split(':').map(Number)
-                         const endH = (h + 1) % 24
-                         return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-                    })()
-               })
+          const durationDays = Number(newTask.value.durationDays) || 1
+
+          const taskPayload = {
+               ...newTask.value,
+               guestEmails: guests,
+               durationDays,
+               startDate: dateKey,
+               endDate: durationDays > 1 ? addDaysToDate(dateKey, durationDays - 1) : dateKey,
+               endTime: newTask.value.endTime || (() => {
+                    const [h, m] = (newTask.value.time || '09:00').split(':').map(Number)
+                    const endH = (h + 1) % 24
+                    return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+               })()
           }
 
-          newTask.value = {
-               title: '',
-               time: '09:00',
-               endTime: '10:00',
-               description: '',
-               completed: false,
-               meetingType: 'none',
-               meetingUrl: '',
-               guestEmailsText: ''
+          if (editingTaskId.value) {
+               store.updateTask(dateKey, {
+                    id: editingTaskId.value,
+                    ...taskPayload
+               })
+          } else {
+               store.addTask(dateKey, taskPayload)
           }
+
+          newTask.value = defaultNewTask()
           showAddForm.value = false
           editingTaskId.value = null
      }
@@ -173,9 +175,9 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           editingTaskId.value = task.id
           newTask.value = {
                title: task.title,
-               time: task.time,
+               time: task.time || '09:00',
                endTime: task.endTime || (() => {
-                    const [h, m] = task.time.split(':').map(Number)
+                    const [h, m] = (task.time || '09:00').split(':').map(Number)
                     const endH = (h + 1) % 24
                     return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`
                })(),
@@ -183,20 +185,20 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
                completed: task.completed,
                meetingType: task.meetingType || 'none',
                meetingUrl: task.meetingUrl || '',
-               guestEmailsText: (task.guestEmails || []).join(', ')
+               guestEmailsText: (task.guestEmails || []).join(', '),
+               durationDays: task.durationDays || 1,
+               useTimeRange: true
           }
           showAddForm.value = true
      }
 
      const toggleComplete = (taskId: string) => {
-          // Read-only for past dates
           if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
           const dateKey = formatDate(selectedDate.value)
           store.toggleTaskComplete(dateKey, taskId)
      }
 
      const deleteTaskItem = (taskId: string) => {
-          // Read-only for past dates
           if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
           const dateKey = formatDate(selectedDate.value)
           store.deleteTask(dateKey, taskId)
@@ -258,6 +260,7 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           editingTaskId,
           showTodoList,
           newTask,
+          endDatePreview,
           currentTasks,
           categorizedTasks,
           nextTask,
