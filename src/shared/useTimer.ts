@@ -67,19 +67,25 @@ export function useTimer(currentActiveTask: any, onTimerComplete: () => void) {
           }
 
           isTimerRunning.value = true
+
+          // Calculate target end time based on current timer values
+          const targetTime = new Date().getTime() + (timerMinutes.value * 60 + timerSeconds.value) * 1000
+
           timerInterval.value = setInterval(() => {
-               if (timerSeconds.value === 0) {
-                    if (timerMinutes.value === 0) {
-                         // Timer reached 0
-                         stopTimer()
-                         onTimerComplete()
-                         return
-                    }
-                    timerMinutes.value--
-                    timerSeconds.value = 59
-               } else {
-                    timerSeconds.value--
+               const now = new Date().getTime()
+               const remainingMs = targetTime - now
+
+               if (remainingMs <= 0) {
+                    timerMinutes.value = 0
+                    timerSeconds.value = 0
+                    stopTimer()
+                    onTimerComplete()
+                    return
                }
+
+               const totalSecondsLeft = Math.ceil(remainingMs / 1000)
+               timerMinutes.value = Math.floor(totalSecondsLeft / 60)
+               timerSeconds.value = totalSecondsLeft % 60
           }, 1000)
      }
 

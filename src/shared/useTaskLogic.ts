@@ -5,9 +5,8 @@ import { addDaysToDate } from '../firebase/tasks'
 export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any, currentTime: any) {
      const showAddForm = ref(false)
      const editingTaskId = ref<string | null>(null)
-     const showTodoList = ref(true)
-
-     const defaultNewTask = () => ({
+     const showTodoList = ref(false)
+     const newTask = ref<any>({
           title: '',
           time: '09:00',
           endTime: '10:00',
