@@ -177,6 +177,18 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           }
 
           // newTask.value = defaultNewTask()
+          newTask.value = {
+               title: '',
+               time: getNowHHMM(),
+               endTime: getOneHourLaterHHMM(),
+               description: '',
+               completed: false,
+               meetingType: 'none',
+               meetingUrl: '',
+               guestEmailsText: '',
+               durationDays: 1,
+               useTimeRange: true
+          }
           showAddForm.value = false
           editingTaskId.value = null
      }
