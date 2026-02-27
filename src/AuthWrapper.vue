@@ -13,13 +13,29 @@ const showApp = computed(() => authStore.isAuthenticated && !authStore.loading)
 <template>
   <div>
     <!-- Loading State -->
-    <div v-if="authStore.loading" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      <div class="text-center">
-        <svg class="animate-spin w-12 h-12 text-blue-600 dark:text-blue-400 mx-auto mb-4" viewBox="0 0 24 24" fill="none">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-        </svg>
-        <p class="text-gray-600 dark:text-gray-400">Loading...</p>
+    <div
+      v-if="authStore.loading"
+      class="min-h-screen flex items-center justify-center bg-[#070c09]"
+    >
+      <div class="flex flex-col items-center gap-4">
+        <!-- Logo spinner -->
+        <div class="relative w-30 h-50 flex items-center justify-center">
+          <svg class="absolute inset-0 w-full h-full animate-spin" viewBox="0 0 56 56" fill="none">
+            <circle cx="28" cy="28" r="24" stroke="#1a2820" stroke-width="3"/>
+            <path
+              d="M28 4a24 24 0 0 1 24 24"
+              stroke="#4ade80"
+              stroke-width="3"
+              stroke-linecap="round"
+            />
+          </svg>
+          <span
+            class="text-lg font-black text-white leading-none"
+            style="font-family:'Georgia',serif"
+          >KeepITs</span>
+          
+        </div>
+        <p class="text-[#4a6b58] text-sm font-light tracking-wide">Loading your workspace…</p>
       </div>
     </div>
 
