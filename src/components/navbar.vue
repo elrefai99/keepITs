@@ -7,7 +7,6 @@ import { db, auth } from '../firebase/config'
 
 const authStore = useAuthStore()
 
-// ── Profile popup state ─────────────────────────────────────────────────────
 const showProfile   = ref(false)
 const editName      = ref('')
 const previewImage  = ref<string | null>(null)   // base64 or URL
@@ -121,7 +120,7 @@ async function handleLogout() {
 
         <!-- Right -->
         <div class="flex items-center gap-3 sm:gap-4">
-          <darkmode />
+          <!-- <darkmode /> -->
 
           <div v-if="authStore.isAuthenticated && authStore.user" class="flex items-center gap-2 sm:gap-3">
 
@@ -167,9 +166,6 @@ async function handleLogout() {
     </nav>
   </header>
 
-  <!-- ══════════════════════════════════════════════════════════════
-       PROFILE SETTINGS POPUP
-  ══════════════════════════════════════════════════════════════ -->
   <Teleport to="body">
     <div
       v-if="showProfile"
