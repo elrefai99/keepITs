@@ -37,12 +37,12 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'og-image.jpg', 'twitter-image.jpg'],
+      includeAssets: ['favicon.png', 'og-image.png', 'twitter-image.png'],
       manifest: {
-        name: 'Schedule Elrefai - Professional Appointment & Task Scheduling',
-        short_name: 'Schedule Elrefai',
+        name: 'KeepITs - Intelligent Schedule & Task Manager',
+        short_name: 'KeepITs',
         description: 'Manage your appointments, tasks, and schedule efficiently with Schedule Elrefai. A simple and powerful scheduling tool for professionals and individuals.',
-        theme_color: '#4F46E5',
+        theme_color: '#4ade80',
         background_color: '#ffffff',
         display: 'standalone',
         scope: '/',
@@ -101,7 +101,7 @@ export default defineConfig({
         categories: ['productivity', 'business', 'utilities'],
         screenshots: [
           {
-            src: '/og-image.jpg',
+            src: '/og-image.png',
             sizes: '1200x630',
             type: 'image/jpeg'
           }
