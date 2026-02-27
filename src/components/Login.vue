@@ -27,7 +27,10 @@
         <h1
           class="text-5xl font-black text-white tracking-tighter leading-none"
           style="font-family:'Georgia',serif"
-        >KeepITs</h1>
+        >Keep<span class="text-[#4ade80]">ITs</span>. </h1>
+        <h2 class="text-[2rem] sm:text-[2rem] font-bold text-white leading-[1] mb-2 tracking-tight" style="font-family:'Georgia',serif">
+          Intelligent Schedule & Task Manager
+        </h2>
       </div>
 
       <!-- Subtext -->

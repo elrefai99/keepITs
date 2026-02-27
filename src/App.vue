@@ -562,7 +562,7 @@ import { useDragDrop } from './shared/useDragDrop'
     class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4"
     @click.self="() => { showAddForm = false; editingTaskId = null; }"
   >
-    <div class="bg-[#0d1a11]/80 backdrop-blur-xl border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/80 w-full max-w-lg max-h-[95vh] overflow-y-auto">
+    <div class="bg-[#0d1a11]/80 backdrop-blur-md border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/80 w-full max-w-lg max-h-[95vh] overflow-y-auto">
 
       <!-- Sticky header -->
       <div class="sticky top-0 z-10 bg-[#0d1a11]/95 backdrop-blur-sm border-b border-[#1f3228] px-5 pt-4 pb-3.5 flex items-start justify-between rounded-t-2xl">
@@ -685,7 +685,7 @@ import { useDragDrop } from './shared/useDragDrop'
   </div>
 
   <div v-if="showReport && selectedDate" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showReport = false">
-    <div class="bg-[#0d1a11]/80 backdrop-blur-xl border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/80 w-full max-w-md p-6 relative overflow-hidden">
+    <div class="bg-[#0d1a11]/80 backdrop-blur-md border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/80 w-full max-w-md p-6 relative overflow-hidden">
       <div class="absolute top-0 right-0 w-48 h-48 bg-[#4ade80]/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
       <div class="absolute bottom-0 left-0 w-40 h-40 bg-violet-500/5 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
       <div class="relative z-10">
@@ -748,7 +748,7 @@ import { useDragDrop } from './shared/useDragDrop'
   </div>
 
   <div v-if="showCalendarPopup" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-start justify-center z-40 pt-16 sm:pt-20" @click.self="showCalendarPopup = false">
-    <div class="bg-[#0d1a11]/80 backdrop-blur-xl border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/70 w-72 p-4">
+    <div class="bg-[#0d1a11]/80 backdrop-blur-md border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/70 w-72 p-4">
       <div class="flex items-center justify-between mb-3">
         <button @click="changePopupMonth(-1)" class="p-1.5 rounded-lg bg-[#0a0f0b] border border-[#1a2820] text-[#4a6b58] hover:text-[#4ade80] hover:border-[#2a4035] transition-all active:scale-95">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>

@@ -1,6 +1,6 @@
-# Schedule Manager
+# KeepITs – Intelligent Schedule & Task Manager
 
-A powerful, aesthetic **Vue 3 + Vite** schedule and task manager designed for productivity. Features **Google sign-in (Firebase Auth)**, real-time **task sync (Cloud Firestore)**, a robust **Pomodoro timer**, and multiple view modes including Calendar and Kanban board.
+KeepITs is a modern, aesthetic **Vue 3 + Vite** schedule and task manager designed for deep work and day planning. It includes **Google sign-in (Firebase Auth)**, real-time **task sync (Cloud Firestore)**, a focused **Pomodoro-style timer**, and multiple views including Calendar, Kanban board, and classic list.
 
 ## Features
 
@@ -43,8 +43,6 @@ A powerful, aesthetic **Vue 3 + Vite** schedule and task manager designed for pr
 *   **⚡ Fast Performance**: Lightning-fast load times with intelligent caching.
 *   **📲 Cross-Platform**: Works on Windows, Mac, Linux, iOS, and Android.
 
-> 📖 **[Read full PWA documentation](./PWA.md)** for installation instructions and technical details.
-
 ## Tech Stack
 
 *   **Frontend**: [Vue 3](https://vuejs.org/) (Composition API), [TypeScript](https://www.typescriptlang.org/), [Vite](https://vitejs.dev/)
@@ -67,8 +65,8 @@ A powerful, aesthetic **Vue 3 + Vite** schedule and task manager designed for pr
 
 1.  **Clone the repository**
     ```bash
-    git clone https://github.com/yourusername/schedule-manager.git
-    cd schedule-manager
+    git clone https://github.com/elrefai99/keepITs.git
+    cd keepITs
     ```
 
 2.  **Install dependencies**
