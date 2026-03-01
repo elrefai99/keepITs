@@ -81,7 +81,7 @@ import { useNotifications } from '../shared/useNotifications';
           </div>
           <div>
             <div class="text-[10px] text-[#4a6b58] uppercase tracking-wider mb-0.5">
-              {{ isBreakTime ? '☕ Break Time' : '🎯 Focus Time' }}
+              {{ isBreakTime ? 'Break Time' : 'Focus Time' }}
             </div>
             <div class="text-2xl sm:text-3xl font-bold font-mono text-white tracking-wider leading-none">
               {{ timerDisplay }}

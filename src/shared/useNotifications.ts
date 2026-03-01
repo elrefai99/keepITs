@@ -47,8 +47,8 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
           lastBreakNotification.value = now
 
           const message = isBreakTime.value
-               ? '🎉 Break time is over! Ready to get back to work?'
-               : '⏰ Time for a break! You\'ve completed 50 minutes of focused work.'
+               ? 'Break time is over! Ready to get back to work?'
+               : 'Time for a break! You have completed 50 minutes of focused work.'
 
           // Play notification sound
           playNotificationSound('break')
@@ -93,7 +93,7 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
                     notifiedTasks.value.add(task.id)
 
                     // Show notification
-                    const message = `⏰ Task starting now: ${task.title}`
+                    const message = `Task starting now: ${task.title}`
                     if ('Notification' in window && Notification.permission === 'granted') {
                          new Notification('Schedule Manager', { body: message })
                     } else if ('Notification' in window && Notification.permission !== 'denied') {

@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { useRoute, useRouter } from 'vue-router'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { updateProfile as firebaseUpdateProfile } from 'firebase/auth'
 import { db, auth } from '../firebase/config'
 
 const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const showProfile   = ref(false)
 const editName      = ref('')
-const previewImage  = ref<string | null>(null)   // base64 or URL
+const previewImage  = ref<string | null>(null)
 const saving        = ref(false)
 const saveSuccess   = ref(false)
 const saveError     = ref('')
 const fileInputRef  = ref<HTMLInputElement | null>(null)
+const mobileMenuOpen = ref(false)
 
-// Computed avatar: prefer local preview → stored photoURL → initials fallback
 const avatarSrc = computed(() =>
   previewImage.value
     || authStore.user?.photoURL
@@ -26,6 +29,19 @@ const userInitials = computed(() => {
   const name = authStore.user?.displayName || authStore.user?.email || '?'
   return name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
 })
+
+const navItems = [
+  { path: '/', label: 'Home', icon: 'home' },
+  { path: '/board', label: 'Board', icon: 'board' },
+  { path: '/calendar', label: 'Calendar', icon: 'calendar' }
+]
+
+const isActive = (path: string) => route.path === path
+
+function navigateTo(path: string) {
+  router.push(path)
+  mobileMenuOpen.value = false
+}
 
 function openProfile() {
   editName.value    = authStore.user?.displayName || ''
@@ -40,7 +56,6 @@ function closeProfile() {
   previewImage.value = authStore.user?.photoURL || null
 }
 
-// Handle image file pick → convert to base64
 function onFileChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
@@ -54,7 +69,6 @@ function onFileChange(e: Event) {
   reader.readAsDataURL(file)
 }
 
-// Save changes to Firebase Auth + Firestore
 async function saveProfile() {
   if (!authStore.user) return
   if (!editName.value.trim()) { saveError.value = 'Name cannot be empty.'; return }
@@ -65,7 +79,6 @@ async function saveProfile() {
   try {
     const photoURL = previewImage.value || authStore.user.photoURL || ''
 
-    // 1. Update Firebase Auth profile
     if (auth.currentUser) {
       await firebaseUpdateProfile(auth.currentUser, {
         displayName: editName.value.trim(),
@@ -73,19 +86,16 @@ async function saveProfile() {
       })
     }
 
-    // 2. Persist to Firestore user doc
     await setDoc(
       doc(db, 'users', authStore.user.uid),
       { displayName: editName.value.trim(), photoURL, updatedAt: serverTimestamp() },
       { merge: true }
     )
 
-    // 3. Refresh auth store so UI updates
     if (authStore.userData) {
       authStore.userData.displayName = editName.value.trim()
       authStore.userData.photoURL    = photoURL
     }
-    // Force reactive refresh on the Firebase user object
     if (authStore.user) {
       (authStore.user as any).displayName = editName.value.trim()
       ;(authStore.user as any).photoURL   = photoURL
@@ -100,7 +110,6 @@ async function saveProfile() {
   }
 }
 
-// Logout
 async function handleLogout() {
   try { await authStore.signOut() } catch (e) { console.error(e) }
 }
@@ -111,41 +120,60 @@ async function handleLogout() {
     <nav class="w-full bg-[#0a0f0b]/90 backdrop-blur-md border-b border-[#1a2820] text-white sticky top-0 z-30">
       <div class="max-w-6xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3 sm:py-3.5">
 
-        <!-- Logo -->
-        <div class="flex items-center gap-2 select-none">
-          <span class="text-xl font-black text-white tracking-tighter leading-none" style="font-family:'Georgia',serif">
-            Keep<span class="text-[#4ade80]">ITs</span>
-          </span>
+        <!-- Logo + Nav -->
+        <div class="flex items-center gap-6">
+          <!-- Logo -->
+          <button @click="navigateTo('/')" class="flex items-center gap-2 select-none">
+            <span class="text-xl font-black text-white tracking-tighter leading-none" style="font-family:'Georgia',serif">
+              Keep<span class="text-[#4ade80]">ITs</span>
+            </span>
+          </button>
+
+          <!-- Desktop Nav -->
+          <div class="hidden sm:flex items-center gap-1">
+            <button v-for="item in navItems" :key="item.path"
+              @click="navigateTo(item.path)"
+              :class="['px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5',
+                isActive(item.path)
+                  ? 'bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/25'
+                  : 'text-[#4a6b58] hover:text-[#8fb89f] hover:bg-[#111a14] border border-transparent']">
+              <!-- Home icon -->
+              <svg v-if="item.icon === 'home'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              <!-- Board icon -->
+              <svg v-else-if="item.icon === 'board'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+              <!-- Calendar icon -->
+              <svg v-else-if="item.icon === 'calendar'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              {{ item.label }}
+            </button>
+          </div>
         </div>
 
         <!-- Right -->
         <div class="flex items-center gap-3 sm:gap-4">
-          <!-- <darkmode /> -->
+
+          <!-- Mobile menu toggle -->
+          <button @click="mobileMenuOpen = !mobileMenuOpen" class="sm:hidden p-2 rounded-lg bg-[#111a14] border border-[#1a2820] text-[#4a6b58] hover:text-[#4ade80] transition-all">
+            <svg v-if="!mobileMenuOpen" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
 
           <div v-if="authStore.isAuthenticated && authStore.user" class="flex items-center gap-2 sm:gap-3">
 
             <!-- Clickable avatar -->
             <button @click="openProfile" class="relative group focus:outline-none" title="Profile settings">
-              <!-- Avatar image -->
               <img v-if="avatarSrc"
                 :src="avatarSrc"
                 class="w-7 h-7 sm:w-8 sm:h-8 rounded-full ring-1 ring-[#2a4035] object-cover group-hover:ring-[#4ade80]/50 transition-all"
                 :alt="authStore.user.displayName || 'User'"
               />
-              <!-- Initials fallback -->
               <div v-else
                 class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#132218] border border-[#2a4035] flex items-center justify-center text-[10px] font-bold text-[#4ade80] group-hover:border-[#4ade80]/50 transition-all">
                 {{ userInitials }}
               </div>
-              <!-- Online dot -->
               <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-[#4ade80] rounded-full border border-[#0a0f0b]" />
-              <!-- Edit hint on hover -->
-              <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#0a0f0b] opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                <svg class="w-1.5 h-1.5 text-[#4ade80]" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 6L18 10.5 8.25 20.25H3.75V15.75z"/></svg>
-              </div>
             </button>
 
-            <!-- Name/email (md+) — also clickable -->
+            <!-- Name/email -->
             <button @click="openProfile" class="hidden md:block text-left hover:opacity-80 transition-opacity focus:outline-none">
               <p class="text-xs font-semibold text-[#d4e8dc] leading-tight">{{ authStore.user.displayName }}</p>
               <p class="text-[10px] text-[#4a6b58] leading-tight">{{ authStore.user.email }}</p>
@@ -163,6 +191,21 @@ async function handleLogout() {
         </div>
 
       </div>
+
+      <!-- Mobile Nav Menu -->
+      <div v-if="mobileMenuOpen" class="sm:hidden border-t border-[#1a2820] bg-[#0a0f0b]/95 backdrop-blur-md px-4 py-3 flex flex-col gap-1">
+        <button v-for="item in navItems" :key="item.path"
+          @click="navigateTo(item.path)"
+          :class="['w-full px-3 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 text-left',
+            isActive(item.path)
+              ? 'bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/25'
+              : 'text-[#4a6b58] hover:text-[#8fb89f] hover:bg-[#111a14] border border-transparent']">
+          <svg v-if="item.icon === 'home'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <svg v-else-if="item.icon === 'board'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+          <svg v-else-if="item.icon === 'calendar'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          {{ item.label }}
+        </button>
+      </div>
     </nav>
   </header>
 
@@ -174,7 +217,6 @@ async function handleLogout() {
     >
       <div class="bg-[#0d1a11]/85 backdrop-blur-xl border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/80 w-full max-w-sm overflow-hidden">
 
-        <!-- Header -->
         <div class="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#1f3228]">
           <div>
             <h2 class="text-sm font-bold text-[#c8ddd5]">Profile Settings</h2>
@@ -188,26 +230,20 @@ async function handleLogout() {
 
         <div class="px-5 py-5 flex flex-col gap-5">
 
-          <!-- Avatar section -->
           <div class="flex flex-col items-center gap-3">
             <div class="relative group cursor-pointer" @click="fileInputRef?.click()">
-              <!-- Avatar preview -->
               <div class="w-20 h-20 rounded-full overflow-hidden ring-2 ring-[#2a4035] group-hover:ring-[#4ade80]/50 transition-all">
                 <img v-if="previewImage" :src="previewImage" class="w-full h-full object-cover" alt="Avatar preview" />
                 <div v-else class="w-full h-full bg-[#132218] flex items-center justify-center text-xl font-bold text-[#4ade80]">
                   {{ userInitials }}
                 </div>
               </div>
-
-              <!-- Hover overlay -->
               <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
                 <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                   <circle cx="12" cy="13" r="4"/>
                 </svg>
               </div>
-
-              <!-- Camera badge -->
               <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#4ade80] flex items-center justify-center shadow-lg border-2 border-[#0d1a11]">
                 <svg class="w-3 h-3 text-[#070c09]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -216,7 +252,6 @@ async function handleLogout() {
               </div>
             </div>
 
-            <!-- Hidden file input -->
             <input
               ref="fileInputRef"
               type="file"
@@ -228,14 +263,13 @@ async function handleLogout() {
             <div class="text-center">
               <button @click="fileInputRef?.click()"
                 class="text-[10px] text-[#4a6b58] hover:text-[#4ade80] transition-colors font-medium">
-                Click photo to change · max 2 MB
+                Click photo to change - max 2 MB
               </button>
               <p v-if="previewImage && previewImage !== authStore.user?.photoURL"
-                class="text-[9px] text-[#4ade80] mt-0.5">New photo selected ✓</p>
+                class="text-[9px] text-[#4ade80] mt-0.5">New photo selected</p>
             </div>
           </div>
 
-          <!-- Name field -->
           <div class="flex flex-col gap-1.5">
             <label class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Display Name</label>
             <input
@@ -248,7 +282,6 @@ async function handleLogout() {
             />
           </div>
 
-          <!-- Email (read-only info) -->
           <div class="flex flex-col gap-1.5">
             <label class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Email</label>
             <div class="w-full p-3 bg-[#0a0f0b]/60 border border-[#131e17] text-[#3d5a4a] rounded-xl text-sm font-mono flex items-center gap-2">
@@ -258,7 +291,6 @@ async function handleLogout() {
             </div>
           </div>
 
-          <!-- Feedback messages -->
           <div v-if="saveError" class="flex items-center gap-2 p-3 bg-red-950/40 border border-red-800/40 rounded-xl text-xs text-red-400">
             <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             {{ saveError }}
@@ -268,7 +300,6 @@ async function handleLogout() {
             Profile saved successfully!
           </div>
 
-          <!-- Action buttons -->
           <div class="flex gap-2.5">
             <button
               @click="saveProfile"
@@ -276,10 +307,9 @@ async function handleLogout() {
               class="flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
               :class="saving ? 'bg-[#4ade80]/50 text-[#070c09]/60 cursor-not-allowed' : 'bg-[#4ade80] text-[#070c09] hover:bg-[#22c55e] shadow-lg shadow-[#4ade80]/20'"
             >
-              <!-- Spinner while saving -->
               <svg v-if="saving" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
               <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              {{ saving ? 'Saving…' : 'Save Changes' }}
+              {{ saving ? 'Saving...' : 'Save Changes' }}
             </button>
             <button @click="closeProfile"
               class="px-4 py-3 rounded-xl font-semibold text-sm bg-[#0a0f0b] border border-[#1f3228] text-[#4a6b58] hover:border-[#2a4035] hover:text-[#8fb89f] active:scale-[0.98] transition-all">
@@ -287,7 +317,6 @@ async function handleLogout() {
             </button>
           </div>
 
-          <!-- Danger zone: Sign out -->
           <div class="pt-1 border-t border-[#131e17]">
             <button @click="handleLogout"
               class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs text-[#3d5a4a] hover:text-red-400 hover:bg-red-950/20 transition-all font-medium">
