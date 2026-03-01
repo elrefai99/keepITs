@@ -11,12 +11,18 @@ import {
 } from 'firebase/firestore'
 import { db } from './config'
 
+/** Default daily work time for multi-day tasks */
+export const DEFAULT_TASK_START_TIME = '09:00'
+export const DEFAULT_TASK_END_TIME = '10:00'
+
 export interface Task {
      id: string
      title: string
      // Time fields (optional for all-day / multi-day tasks)
-     time: string       // start time e.g. "09:00"
-     endTime?: string   // end time e.g. "17:00" (within a day)
+     time: string       // start time e.g. "09:00" — default for all days
+     endTime?: string   // end time e.g. "10:00" — default for all days
+     // Per-day time overrides for multi-day tasks: { "2026-03-01": { time: "10:00", endTime: "11:00" }, ... }
+     dailyTimes?: Record<string, { time: string; endTime: string }>
      // Duration fields
      durationDays?: number   // number of days (1 = single day, 4 = 4 days)
      startDate: string       // YYYY-MM-DD  (primary date / anchor)

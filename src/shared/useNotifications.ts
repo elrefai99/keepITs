@@ -71,7 +71,7 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
           const dateKey = todayFormatted.value
           const tasks = store.getTasksForDate(dateKey)
                .filter((task: any) => !task.completed)
-               .sort((a: any, b: any) => a.time.localeCompare(b.time))
+               .sort((a: any, b: any) => (a.time || '99:99').localeCompare(b.time || '99:99'))
 
           if (tasks.length === 0) return
 

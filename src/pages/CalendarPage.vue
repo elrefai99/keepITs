@@ -56,7 +56,11 @@ const getCurrentTimePosition = () => {
 
 const getAllTasksForDay = (date: Date) => {
   const dateKey = formatDate(date)
-  return store.getTasksSpanningDate(dateKey).sort((a: any, b: any) => (a.time || '').localeCompare(b.time || ''))
+  return store.getTasksSpanningDate(dateKey).sort((a: any, b: any) => {
+    const ta = a.time || '99:99'
+    const tb = b.time || '99:99'
+    return ta.localeCompare(tb)
+  })
 }
 
 const getMultiDayLabel = (task: any, dateKey: string): string => {
@@ -317,7 +321,12 @@ onMounted(async () => {
         </div>
 
         <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
-          <div class="px-3.5 py-2 border-b border-[#131e17]"><span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Time Range</span></div>
+          <div class="px-3.5 py-2 border-b border-[#131e17] flex items-center justify-between">
+            <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Time Range</span>
+            <span v-if="newTask.durationDays > 1" class="text-[9px] text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded font-medium">
+              Only for {{ selectedDate ? formatDate(selectedDate) : 'this day' }}
+            </span>
+          </div>
           <div class="px-3.5 py-3 flex items-end gap-3">
             <div class="flex-1">
               <div class="text-[9px] text-[#2d4035] mb-1.5 uppercase tracking-widest font-semibold">Start</div>

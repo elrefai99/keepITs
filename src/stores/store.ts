@@ -34,6 +34,23 @@ export const useScheduleStore = defineStore('schedule', {
                     }
                }
                return results
+          },
+
+          /**
+           * Returns effective {time, endTime} for a task on a specific date.
+           * Multi-day tasks can have per-day overrides in dailyTimes.
+           */
+          getTaskTimeForDate: () => (task: any, dateKey: string): { time: string; endTime: string } => {
+               if (task.durationDays && task.durationDays > 1 && task.dailyTimes?.[dateKey]) {
+                    return {
+                         time: task.dailyTimes[dateKey].time || '09:00',
+                         endTime: task.dailyTimes[dateKey].endTime || '10:00'
+                    }
+               }
+               return {
+                    time: task.time || '09:00',
+                    endTime: task.endTime || '10:00'
+               }
           }
      },
 
@@ -57,13 +74,12 @@ export const useScheduleStore = defineStore('schedule', {
                          this.schedules[task.date].push(task)
                     })
 
-                    // Sort tasks by order within each date
+                    // Sort tasks by time (AM first → PM last), no-time tasks go to end
                     Object.keys(this.schedules).forEach(dateKey => {
                          this.schedules[dateKey].sort((a, b) => {
-                              if (a.order !== undefined && b.order !== undefined) {
-                                   return a.order - b.order
-                              }
-                              return (a.time || '').localeCompare(b.time || '')
+                              const ta = a.time || '99:99'
+                              const tb = b.time || '99:99'
+                              return ta.localeCompare(tb)
                          })
                     })
 

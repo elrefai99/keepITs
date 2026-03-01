@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { formatDate, getMinutesFromTime, getCurrentTimeString, isDateDisabled } from '../utils/dateUtils'
-import { addDaysToDate } from '../firebase/tasks'
+import { addDaysToDate, DEFAULT_TASK_START_TIME, DEFAULT_TASK_END_TIME } from '../firebase/tasks'
 
 export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any, currentTime: any) {
      const showAddForm = ref(false)
@@ -20,15 +20,16 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
 
      const newTask = ref<any>({
           title: '',
-          time: getNowHHMM(),
-          endTime: getOneHourLaterHHMM(),
+          time: DEFAULT_TASK_START_TIME,
+          endTime: DEFAULT_TASK_END_TIME,
           description: '',
           completed: false,
           meetingType: 'none',
           meetingUrl: '',
           guestEmailsText: '',
-          durationDays: 1,       // ← new: how many days this task spans
-          useTimeRange: true      // ← new: toggle between time range and all-day
+          durationDays: 1,
+          useTimeRange: true,
+          dailyTimes: {} as Record<string, { time: string; endTime: string }>
      })
 
 
@@ -46,12 +47,11 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           if (!selectedDate.value) return []
           const dateKey = formatDate(selectedDate.value)
           const tasks = store.getTasksSpanningDate(dateKey)
-          // Sort by order first, then by time
+          // Sort by time AM → PM, tasks with no time go to end
           return tasks.sort((a: any, b: any) => {
-               if (a.order !== undefined && b.order !== undefined) {
-                    return a.order - b.order
-               }
-               return (a.time || '').localeCompare(b.time || '')
+               const ta = a.time || '99:99'
+               const tb = b.time || '99:99'
+               return ta.localeCompare(tb)
           })
      })
 
@@ -102,7 +102,7 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           const dateKey = todayFormatted.value
           const tasks = store.getTasksForDate(dateKey)
                .filter((task: any) => !task.completed)
-               .sort((a: any, b: any) => (a.time || '').localeCompare(b.time || ''))
+               .sort((a: any, b: any) => (a.time || '99:99').localeCompare(b.time || '99:99'))
 
           const currentTimeStr = getCurrentTimeString(currentTime.value)
           return tasks.find((task: any) => task.time && task.time > currentTimeStr) || null
@@ -112,7 +112,7 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           const dateKey = todayFormatted.value
           const tasks = store.getTasksForDate(dateKey)
                .filter((task: any) => !task.completed)
-               .sort((a: any, b: any) => (a.time || '').localeCompare(b.time || ''))
+               .sort((a: any, b: any) => (a.time || '99:99').localeCompare(b.time || '99:99'))
 
           const currentTimeStr = getCurrentTimeString(currentTime.value)
           const currentMinutes = getMinutesFromTime(currentTimeStr)
@@ -154,17 +154,31 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
 
           const durationDays = Number(newTask.value.durationDays) || 1
 
+          // For multi-day tasks, merge per-day time override into dailyTimes
+          const existingDailyTimes: Record<string, { time: string; endTime: string }> =
+               { ...(newTask.value.dailyTimes || {}) }
+
+          if (durationDays > 1) {
+               // Store the time set in the form as this day's override
+               existingDailyTimes[dateKey] = {
+                    time: newTask.value.time || DEFAULT_TASK_START_TIME,
+                    endTime: newTask.value.endTime || DEFAULT_TASK_END_TIME
+               }
+          }
+
           const taskPayload = {
                ...newTask.value,
                guestEmails: guests,
                durationDays,
-               startDate: dateKey,
-               endDate: durationDays > 1 ? addDaysToDate(dateKey, durationDays - 1) : dateKey,
-               endTime: newTask.value.endTime || (() => {
-                    const [h, m] = (newTask.value.time || '09:00').split(':').map(Number)
-                    const endH = (h + 1) % 24
-                    return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-               })()
+               startDate: editingTaskId.value
+                    ? (newTask.value.startDate || dateKey)
+                    : dateKey,
+               endDate: durationDays > 1
+                    ? addDaysToDate(editingTaskId.value ? (newTask.value.startDate || dateKey) : dateKey, durationDays - 1)
+                    : (editingTaskId.value ? (newTask.value.startDate || dateKey) : dateKey),
+               time: durationDays > 1 ? DEFAULT_TASK_START_TIME : (newTask.value.time || DEFAULT_TASK_START_TIME),
+               endTime: durationDays > 1 ? DEFAULT_TASK_END_TIME : (newTask.value.endTime || DEFAULT_TASK_END_TIME),
+               dailyTimes: existingDailyTimes
           }
 
           if (editingTaskId.value) {
@@ -176,40 +190,56 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
                store.addTask(dateKey, taskPayload)
           }
 
-          // newTask.value = defaultNewTask()
           newTask.value = {
                title: '',
-               time: getNowHHMM(),
-               endTime: getOneHourLaterHHMM(),
+               time: DEFAULT_TASK_START_TIME,
+               endTime: DEFAULT_TASK_END_TIME,
                description: '',
                completed: false,
                meetingType: 'none',
                meetingUrl: '',
                guestEmailsText: '',
                durationDays: 1,
-               useTimeRange: true
+               useTimeRange: true,
+               dailyTimes: {}
           }
           showAddForm.value = false
           editingTaskId.value = null
      }
 
-     const handleEditTask = (task: any) => {
+     const handleEditTask = (task: any, forDateKey?: string) => {
           editingTaskId.value = task.id
+          const durationDays = task.durationDays || 1
+          const dailyTimes: Record<string, { time: string; endTime: string }> = { ...(task.dailyTimes || {}) }
+
+          // For multi-day tasks: load this day's specific time if it exists,
+          // otherwise fall back to the task's default (09:00/10:00)
+          let editTime = task.time || DEFAULT_TASK_START_TIME
+          let editEndTime = task.endTime || DEFAULT_TASK_END_TIME
+          if (forDateKey && durationDays > 1) {
+               const dayOverride = dailyTimes[forDateKey]
+               if (dayOverride) {
+                    editTime = dayOverride.time
+                    editEndTime = dayOverride.endTime
+               } else {
+                    editTime = DEFAULT_TASK_START_TIME
+                    editEndTime = DEFAULT_TASK_END_TIME
+               }
+          }
+
           newTask.value = {
                title: task.title,
-               time: task.time || '09:00',
-               endTime: task.endTime || (() => {
-                    const [h, m] = (task.time || '09:00').split(':').map(Number)
-                    const endH = (h + 1) % 24
-                    return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-               })(),
+               time: editTime,
+               endTime: editEndTime,
                description: task.description || '',
                completed: task.completed,
                meetingType: task.meetingType || 'none',
                meetingUrl: task.meetingUrl || '',
                guestEmailsText: (task.guestEmails || []).join(', '),
-               durationDays: task.durationDays || 1,
-               useTimeRange: true
+               durationDays,
+               startDate: task.startDate,
+               useTimeRange: true,
+               dailyTimes
           }
           showAddForm.value = true
      }

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useScheduleStore } from '../stores/store'
-import { formatDate, getCurrentTimeString, getMinutesFromTime } from '../utils/dateUtils'
+import { formatDate, getCurrentTimeString, getMinutesFromTime, isDateDisabled } from '../utils/dateUtils'
 import { useRouter } from 'vue-router'
+import { useCalendar } from '../shared/useCalendar'
+import { useTaskLogic } from '../shared/useTaskLogic'
 
 const store = useScheduleStore()
 const router = useRouter()
@@ -12,6 +14,17 @@ const today = new Date()
 today.setHours(0, 0, 0, 0)
 const todayFormatted = computed(() => formatDate(today))
 
+// useCalendar just for selectedDate (we lock it to today)
+const { selectedDate } = useCalendar()
+selectedDate.value = today
+
+// useTaskLogic wires up add/edit form
+const {
+  showAddForm, editingTaskId, newTask, endDatePreview,
+  handleAddTask, handleEditTask, toggleComplete, deleteTaskItem,
+  openGoogleCalendarForTask
+} = useTaskLogic(store, selectedDate, todayFormatted, currentTime)
+
 // Filter state
 const activeFilter = ref<string | null>(null)
 
@@ -19,9 +32,11 @@ const activeFilter = ref<string | null>(null)
 const todayTasks = computed(() => {
   const dateKey = todayFormatted.value
   const tasks = store.getTasksSpanningDate(dateKey)
+  // Sort AM → PM; tasks with no time go to end
   return tasks.sort((a: any, b: any) => {
-    if (a.order !== undefined && b.order !== undefined) return a.order - b.order
-    return (a.time || '').localeCompare(b.time || '')
+    const ta = a.time || '99:99'
+    const tb = b.time || '99:99'
+    return ta.localeCompare(tb)
   })
 })
 
@@ -93,7 +108,7 @@ const filteredTasks = computed(() => {
   return todayTasks.value.filter((task: any) => getTaskStatus(task) === activeFilter.value)
 })
 
-// Selected task
+// Selected task (for the detail drawer)
 const selectedTaskId = ref<string | null>(null)
 const selectedTask = computed(() => {
   if (!selectedTaskId.value) return null
@@ -103,6 +118,8 @@ const selectedTask = computed(() => {
 const selectTask = (taskId: string) => {
   selectedTaskId.value = selectedTaskId.value === taskId ? null : taskId
 }
+
+const closeDrawer = () => { selectedTaskId.value = null }
 
 const toggleFilter = (statusId: string) => {
   activeFilter.value = activeFilter.value === statusId ? null : statusId
@@ -152,6 +169,25 @@ const getStatusLabel = (status: string): string => {
   if (status === 'waiting') return 'Waiting'
   if (status === 'prioritized') return 'Priority'
   return 'Done'
+}
+
+// Open edit form for a task (from the drawer)
+const openEditFromDrawer = (task: any) => {
+  handleEditTask(task, todayFormatted.value)
+  closeDrawer()
+}
+
+// Delete task from drawer
+const deleteFromDrawer = (taskId: string) => {
+  if (!confirm('Delete this task?')) return
+  deleteTaskItem(taskId)
+  closeDrawer()
+}
+
+// Toggle complete from drawer
+const toggleFromDrawer = (taskId: string) => {
+  toggleComplete(taskId)
+  // keep drawer open — selectedTask will reactively update
 }
 
 onMounted(async () => {
@@ -450,73 +486,282 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- SELECTED TASK DETAIL panel -->
-    <div v-if="selectedTask" class="border-t border-[#1a2820] bg-[#080d0a]">
-      <div class="px-4 sm:px-6 py-4">
-        <div class="flex items-start justify-between gap-4 mb-3">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-1">
-              <div :class="['w-2.5 h-2.5 rounded-full',
-                getTaskStatus(selectedTask) === 'active' ? 'bg-[#4ade80] shadow-[0_0_6px_rgba(74,222,128,0.4)]' :
+    <!-- ======= TASK DETAIL DRAWER (slide-in from right) ======= -->
+    <transition name="drawer">
+    <div
+      v-if="selectedTask"
+      class="fixed inset-0 z-50 flex justify-end"
+    >
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="closeDrawer" />
+
+      <!-- Drawer panel -->
+      <div class="relative w-full max-w-sm sm:max-w-md h-full bg-[#0b1410] border-l border-[#1f3228] flex flex-col shadow-2xl shadow-black overflow-hidden">
+
+        <!-- Header -->
+        <div class="flex items-start justify-between px-5 pt-5 pb-4 border-b border-[#1f3228] bg-[#0d1a11]/80 backdrop-blur-sm flex-shrink-0">
+          <div class="flex-1 min-w-0 pr-3">
+            <!-- Status badge -->
+            <div class="flex items-center gap-2 mb-2">
+              <div :class="['w-2 h-2 rounded-full flex-shrink-0',
+                getTaskStatus(selectedTask) === 'active' ? 'bg-[#4ade80] shadow-[0_0_6px_rgba(74,222,128,0.5)] animate-pulse' :
                 getTaskStatus(selectedTask) === 'waiting' ? 'bg-blue-400' :
                 getTaskStatus(selectedTask) === 'prioritized' ? 'bg-amber-400' :
-                'bg-[#4a6b58]']">
-              </div>
+                'bg-[#4a6b58]']"
+              />
               <span :class="['px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border',
                 getTaskStatus(selectedTask) === 'active' ? 'bg-[#4ade80]/10 text-[#4ade80] border-[#4ade80]/20' :
                 getTaskStatus(selectedTask) === 'waiting' ? 'bg-blue-400/10 text-blue-400 border-blue-400/20' :
                 getTaskStatus(selectedTask) === 'prioritized' ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' :
-                'bg-[#4a6b58]/10 text-[#4a6b58] border-[#4a6b58]/20']">
-                {{ getStatusLabel(getTaskStatus(selectedTask)) }}
+                'bg-[#4a6b58]/10 text-[#4a6b58] border-[#4a6b58]/20']"
+              >{{ getStatusLabel(getTaskStatus(selectedTask)) }}</span>
+              <span v-if="selectedTask.durationDays > 1" class="px-2 py-0.5 rounded bg-[#4ade80]/10 text-[9px] font-bold text-[#4ade80] border border-[#4ade80]/20">
+                {{ selectedTask.durationDays }}d task
               </span>
               <span v-if="selectedTask.meetingUrl" class="px-2 py-0.5 rounded bg-blue-900/40 text-[9px] font-semibold text-blue-300 border border-blue-800/30">Meeting</span>
             </div>
-            <h3 class="text-sm font-bold text-[#c8ddd5]">{{ selectedTask.title }}</h3>
+            <!-- Title -->
+            <h2 :class="['text-base font-bold leading-snug break-words',
+              selectedTask.completed ? 'text-[#4a6b58] line-through' : 'text-[#e8f5ee]']"
+            >{{ selectedTask.title }}</h2>
           </div>
-          <button @click="selectedTaskId = null" class="w-7 h-7 rounded-lg bg-[#111a14] border border-[#1a2820] text-[#3d5a4a] hover:text-white hover:border-[#2a4035] flex items-center justify-center transition-all flex-shrink-0">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button @click="closeDrawer"
+            class="w-8 h-8 rounded-xl bg-[#132218] border border-[#1f3228] text-[#4a6b58] hover:text-white hover:border-[#2a4035] flex items-center justify-center transition-all flex-shrink-0 mt-0.5"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div class="bg-[#0a0f0b] border border-[#1a2820] rounded-lg p-3">
-            <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-1">Start</div>
-            <div class="text-xs font-mono font-bold text-[#8fb89f]">{{ selectedTask.time || '--:--' }}</div>
+        <!-- Scrollable body -->
+        <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4" style="scrollbar-width:thin;scrollbar-color:#1a2820 transparent">
+
+          <!-- Time & Progress cards -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="bg-[#0a0f0b] border border-[#1a2820] rounded-xl p-3">
+              <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-1.5 font-semibold">Start Time</div>
+              <div class="text-sm font-black font-mono text-[#4ade80]">{{ selectedTask.time || '—' }}</div>
+            </div>
+            <div class="bg-[#0a0f0b] border border-[#1a2820] rounded-xl p-3">
+              <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-1.5 font-semibold">End Time</div>
+              <div class="text-sm font-black font-mono text-[#8fb89f]">{{ selectedTask.endTime || '—' }}</div>
+            </div>
+            <div class="bg-[#0a0f0b] border border-[#1a2820] rounded-xl p-3">
+              <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-1.5 font-semibold">Duration</div>
+              <div class="text-sm font-black font-mono text-[#8fb89f]">{{ selectedTask.durationDays || 1 }} day{{ (selectedTask.durationDays || 1) > 1 ? 's' : '' }}</div>
+            </div>
+            <div class="bg-[#0a0f0b] border border-[#1a2820] rounded-xl p-3">
+              <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-1.5 font-semibold">Progress</div>
+              <div class="text-sm font-black font-mono text-[#4ade80]">{{ getTaskProgress(selectedTask) }}%</div>
+            </div>
           </div>
-          <div class="bg-[#0a0f0b] border border-[#1a2820] rounded-lg p-3">
-            <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-1">End</div>
-            <div class="text-xs font-mono font-bold text-[#8fb89f]">{{ selectedTask.endTime || '--:--' }}</div>
+
+          <!-- Progress bar -->
+          <div class="bg-[#0a0f0b] border border-[#1a2820] rounded-xl p-3">
+            <div class="flex justify-between text-[9px] text-[#2d4035] mb-2">
+              <span class="uppercase tracking-widest font-semibold">Task progress</span>
+              <span class="font-mono">{{ getTaskProgress(selectedTask) }}%</span>
+            </div>
+            <div class="h-2 bg-[#111a14] rounded-full overflow-hidden">
+              <div
+                :class="['h-full rounded-full transition-all duration-700',
+                  getTaskStatus(selectedTask) === 'active' ? 'bg-[#4ade80]' :
+                  getTaskStatus(selectedTask) === 'completed' ? 'bg-[#4a6b58]' :
+                  getTaskStatus(selectedTask) === 'waiting' ? 'bg-blue-400/60' :
+                  'bg-amber-400/70']"
+                :style="{ width: `${getTaskProgress(selectedTask)}%` }"
+              />
+            </div>
           </div>
-          <div class="bg-[#0a0f0b] border border-[#1a2820] rounded-lg p-3">
-            <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-1">Progress</div>
-            <div class="text-xs font-mono font-bold text-[#4ade80]">{{ getTaskProgress(selectedTask) }}%</div>
+
+          <!-- Multi-day span -->
+          <div v-if="selectedTask.durationDays > 1" class="bg-[#4ade80]/5 border border-[#4ade80]/15 rounded-xl p-3">
+            <div class="text-[9px] text-[#3d5a4a] uppercase tracking-widest mb-1.5 font-semibold">Date Span</div>
+            <div class="text-xs font-mono text-[#8fb89f] flex items-center gap-2">
+              <span>{{ selectedTask.startDate }}</span>
+              <svg class="w-3 h-3 text-[#2d4035]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              <span>{{ selectedTask.endDate || selectedTask.startDate }}</span>
+            </div>
           </div>
-          <div class="bg-[#0a0f0b] border border-[#1a2820] rounded-lg p-3">
-            <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-1">Duration</div>
-            <div class="text-xs font-mono font-bold text-[#8fb89f]">{{ selectedTask.durationDays || 1 }}d</div>
+
+          <!-- Description -->
+          <div v-if="selectedTask.description" class="bg-[#0a0f0b] border border-[#1a2820] rounded-xl p-3">
+            <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-2.5 font-semibold">Description</div>
+            <div class="space-y-1.5">
+              <div
+                v-for="(line, i) in descLines(selectedTask.description)"
+                :key="i"
+                class="flex items-start gap-2 text-xs text-[#8fb89f] leading-relaxed"
+              >
+                <span class="text-[#4ade80] mt-0.5 flex-shrink-0 font-bold">›</span>
+                <span class="break-words">{{ line }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Meeting -->
+          <div v-if="selectedTask.meetingUrl" class="bg-blue-950/30 border border-blue-800/30 rounded-xl p-3">
+            <div class="text-[9px] text-blue-400/70 uppercase tracking-widest mb-2.5 font-semibold">Meeting</div>
+            <div v-if="selectedTask.guestEmails?.length" class="text-[10px] text-blue-300/70 mb-2">
+              Guests: {{ selectedTask.guestEmails.join(', ') }}
+            </div>
+            <a
+              :href="selectedTask.meetingUrl" target="_blank" rel="noreferrer"
+              class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-500/15 text-blue-300 text-xs font-bold border border-blue-500/25 hover:bg-blue-500/25 transition-colors w-full justify-center"
+            >
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M5 5v14h14"/></svg>
+              Join Meeting
+            </a>
+          </div>
+
+          <!-- Completed notice -->
+          <div v-if="selectedTask.completed" class="flex items-center gap-2 p-3 bg-[#4a6b58]/10 border border-[#4a6b58]/20 rounded-xl">
+            <svg class="w-4 h-4 text-[#4a6b58] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <span class="text-xs text-[#4a6b58] font-semibold">Task completed</span>
           </div>
         </div>
 
-        <div v-if="selectedTask.description" class="mt-3 bg-[#0a0f0b] border border-[#1a2820] rounded-lg p-3">
-          <div class="text-[9px] text-[#2d4035] uppercase tracking-widest mb-2">Description</div>
-          <div class="space-y-1">
-            <div v-for="(line, i) in descLines(selectedTask.description)" :key="i" class="flex items-start gap-1.5 text-[11px] text-[#4a6b58]">
-              <span class="text-[#2d4035] mt-0.5 flex-shrink-0">-</span>
-              <span class="break-words">{{ line }}</span>
+        <!-- Footer actions -->
+        <div class="flex-shrink-0 px-5 py-4 border-t border-[#1f3228] bg-[#0d1a11]/60 backdrop-blur-sm space-y-2">
+          <!-- Edit -->
+          <button
+            @click="openEditFromDrawer(selectedTask)"
+            class="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-[#4ade80] text-[#070c09] hover:bg-[#22c55e] active:scale-[0.98] transition-all shadow-lg shadow-[#4ade80]/15"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit Task
+          </button>
+          <div class="flex gap-2">
+            <!-- Toggle complete -->
+            <button
+              @click="toggleFromDrawer(selectedTask.id)"
+              :class="['flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-semibold text-xs border transition-all active:scale-[0.98]',
+                selectedTask.completed
+                  ? 'bg-[#4a6b58]/10 border-[#4a6b58]/25 text-[#4a6b58] hover:bg-[#4a6b58]/20'
+                  : 'bg-[#4ade80]/8 border-[#4ade80]/20 text-[#4ade80]/80 hover:bg-[#4ade80]/15']"
+            >
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              {{ selectedTask.completed ? 'Mark Undone' : 'Mark Done' }}
+            </button>
+            <!-- Delete -->
+            <button
+              @click="deleteFromDrawer(selectedTask.id)"
+              class="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-semibold text-xs border border-red-800/30 text-red-400/70 bg-red-950/20 hover:bg-red-950/40 hover:text-red-300 active:scale-[0.98] transition-all"
+            >
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </transition>
+
+  </div>
+
+  <!-- ======= EDIT TASK MODAL ======= -->
+  <div
+    v-if="showAddForm && selectedDate && !isDateDisabled(selectedDate)"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-4"
+    @click.self="() => { showAddForm = false; editingTaskId = null; }"
+  >
+    <div class="bg-[#0d1a11]/80 backdrop-blur-md border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/80 w-full max-w-lg max-h-[95vh] overflow-y-auto">
+
+      <div class="sticky top-0 z-10 bg-[#0d1a11]/95 backdrop-blur-sm border-b border-[#1f3228] px-5 pt-4 pb-3.5 flex items-start justify-between rounded-t-2xl">
+        <div>
+          <h3 class="text-base font-bold text-[#c8ddd5] leading-tight">{{ editingTaskId ? 'Edit Task' : 'New Task' }}</h3>
+          <p class="text-[10px] text-[#3d5a4a] mt-0.5 font-mono">{{ todayFormatted }}</p>
+        </div>
+        <button @click="() => { showAddForm = false; editingTaskId = null; }"
+          class="w-8 h-8 flex items-center justify-center rounded-xl bg-[#132218] border border-[#1f3228] text-[#4a6b58] hover:text-white hover:border-[#2a4035] active:scale-95 transition-all mt-0.5">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="p-5 flex flex-col gap-3.5">
+        <input v-model="newTask.title" type="text" placeholder="Task title *"
+          class="w-full p-3.5 bg-[#0a0f0b] border border-[#1f3228] text-[#c8ddd5] rounded-xl text-sm outline-none focus:border-[#4ade80]/50 focus:ring-2 focus:ring-[#4ade80]/10 placeholder-[#2d4035] transition-all font-medium" />
+
+        <!-- Duration -->
+        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+          <div class="px-3.5 py-2 border-b border-[#131e17]"><span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Duration (days)</span></div>
+          <div class="px-3.5 py-3">
+            <div class="flex items-center gap-3">
+              <button type="button" @click="newTask.durationDays = Math.max(1,(newTask.durationDays||1)-1)" class="w-8 h-8 rounded-lg bg-[#132218] border border-[#2a4035] text-[#4ade80] text-lg font-bold flex items-center justify-center hover:bg-[#1a3020] active:scale-90 transition-all leading-none">-</button>
+              <input v-model.number="newTask.durationDays" type="number" min="1" max="365" class="w-14 text-center p-2 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm font-bold outline-none focus:border-[#4ade80]/40" />
+              <button type="button" @click="newTask.durationDays = (newTask.durationDays||1)+1" class="w-8 h-8 rounded-lg bg-[#132218] border border-[#2a4035] text-[#4ade80] text-lg font-bold flex items-center justify-center hover:bg-[#1a3020] active:scale-90 transition-all leading-none">+</button>
+              <span class="text-xs text-[#3d5a4a]">{{ newTask.durationDays === 1 ? 'single day' : 'days' }}</span>
+            </div>
+            <div v-if="endDatePreview" class="mt-2.5 flex items-center gap-2 text-[10px]">
+              <span class="text-[#4a6b58] font-mono">{{ todayFormatted }}</span>
+              <svg class="w-3 h-3 text-[#2d4035]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              <span class="text-[#8fb89f] font-mono">{{ endDatePreview }}</span>
+              <span class="ml-auto bg-[#4ade80]/15 text-[#4ade80] border border-[#4ade80]/20 px-1.5 py-0.5 rounded text-[10px] font-bold">{{ newTask.durationDays }}d</span>
             </div>
           </div>
         </div>
 
-        <div v-if="selectedTask.meetingUrl" class="mt-3">
-          <a :href="selectedTask.meetingUrl" target="_blank" rel="noreferrer"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-300 text-xs font-semibold border border-blue-500/20 hover:bg-blue-500/20 transition-colors">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M5 5v14h14"/></svg>
-            Join Meeting
-          </a>
+        <!-- Time -->
+        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+          <div class="px-3.5 py-2 border-b border-[#131e17] flex items-center justify-between">
+            <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Time Range</span>
+            <span v-if="newTask.durationDays > 1" class="text-[9px] text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded font-medium">Only for today</span>
+          </div>
+          <div class="px-3.5 py-3 flex items-end gap-3">
+            <div class="flex-1">
+              <div class="text-[9px] text-[#2d4035] mb-1.5 uppercase tracking-widest font-semibold">Start</div>
+              <input v-model="newTask.time" type="time" class="w-full p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm outline-none focus:border-[#4ade80]/40 transition-all" />
+            </div>
+            <div class="pb-2.5 flex-shrink-0"><svg class="w-4 h-4 text-[#2d4035]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></div>
+            <div class="flex-1">
+              <div class="text-[9px] text-[#2d4035] mb-1.5 uppercase tracking-widest font-semibold">End</div>
+              <input v-model="newTask.endTime" type="time" class="w-full p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm outline-none focus:border-[#4ade80]/40 transition-all" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+          <div class="px-3.5 py-2 border-b border-[#131e17] flex items-center justify-between">
+            <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Description</span>
+            <span class="text-[9px] text-[#2d4035]">each line = bullet</span>
+          </div>
+          <textarea v-model="newTask.description" placeholder="Enter each point on a new line" rows="3"
+            class="w-full p-3.5 bg-transparent text-[#c8ddd5] text-sm resize-none outline-none placeholder-[#2d4035] font-mono leading-relaxed" />
+        </div>
+
+        <!-- Meeting -->
+        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+          <div class="px-3.5 py-2 border-b border-[#131e17]"><span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Meeting</span></div>
+          <div class="px-3.5 py-3 flex flex-col gap-2.5">
+            <select v-model="newTask.meetingType" class="w-full p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#8fb89f] rounded-lg text-sm outline-none focus:border-[#4ade80]/40 transition-all cursor-pointer appearance-none">
+              <option value="none">No meeting</option>
+              <option value="google">Google Meet</option>
+              <option value="teams">Microsoft Teams</option>
+              <option value="custom">Other link</option>
+            </select>
+            <template v-if="newTask.meetingType !== 'none'">
+              <input v-model="newTask.meetingUrl" type="url" placeholder="Paste meeting link" class="w-full p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#8fb89f] rounded-lg text-xs outline-none focus:border-[#4ade80]/40 placeholder-[#2d4035] transition-all" />
+              <div class="flex gap-2">
+                <input v-model="newTask.guestEmailsText" type="text" placeholder="Guest emails, comma separated" class="flex-1 p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#8fb89f] rounded-lg text-xs outline-none focus:border-[#4ade80]/40 placeholder-[#2d4035] transition-all" />
+                <button type="button" @click="openGoogleCalendarForTask" class="px-3 py-2 rounded-lg bg-[#132218] border border-[#2a4035] text-[#4ade80] text-xs font-semibold hover:bg-[#1a3020] active:scale-95 transition-all whitespace-nowrap">GCal</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-2.5 pt-0.5">
+          <button @click="handleAddTask" class="flex-1 py-3.5 rounded-xl font-bold text-sm bg-[#4ade80] text-[#070c09] hover:bg-[#22c55e] active:scale-[0.98] transition-all shadow-lg shadow-[#4ade80]/20 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline v-if="editingTaskId" points="20 6 9 17 4 12"/>
+              <template v-else><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></template>
+            </svg>
+            {{ editingTaskId ? 'Update Task' : 'Add Task' }}
+          </button>
+          <button @click="() => { showAddForm = false; editingTaskId = null; }" class="flex-1 py-3.5 rounded-xl font-semibold text-sm bg-[#0a0f0b] border border-[#1f3228] text-[#4a6b58] hover:border-[#2a4035] hover:text-[#8fb89f] active:scale-[0.98] transition-all">Cancel</button>
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -540,5 +785,22 @@ onMounted(async () => {
   .dashboard-grid {
     grid-template-columns: 1fr 5rem 1fr;
   }
+}
+
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: opacity 0.25s ease;
+}
+.drawer-enter-active .relative,
+.drawer-leave-active .relative {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.drawer-enter-from,
+.drawer-leave-to {
+  opacity: 0;
+}
+.drawer-enter-from .relative,
+.drawer-leave-to .relative {
+  transform: translateX(100%);
 }
 </style>
