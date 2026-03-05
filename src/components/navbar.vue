@@ -33,7 +33,9 @@ const userInitials = computed(() => {
 const navItems = [
   { path: '/', label: 'Home', icon: 'home' },
   { path: '/board', label: 'Board', icon: 'board' },
-  { path: '/calendar', label: 'Calendar', icon: 'calendar' }
+  { path: '/calendar', label: 'Calendar', icon: 'calendar' },
+  { path: '/blogs', label: 'Blogs', icon: 'blog' },
+  { path: '/blogs/my', label: 'My Blogs', icon: 'myblog', authOnly: true }
 ]
 
 const isActive = (path: string) => route.path === path
@@ -131,20 +133,26 @@ async function handleLogout() {
 
           <!-- Desktop Nav -->
           <div class="hidden sm:flex items-center gap-1">
-            <button v-for="item in navItems" :key="item.path"
-              @click="navigateTo(item.path)"
-              :class="['px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5',
-                isActive(item.path)
-                  ? 'bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/25'
-                  : 'text-[#4a6b58] hover:text-[#8fb89f] hover:bg-[#111a14] border border-transparent']">
-              <!-- Home icon -->
-              <svg v-if="item.icon === 'home'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              <!-- Board icon -->
-              <svg v-else-if="item.icon === 'board'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
-              <!-- Calendar icon -->
-              <svg v-else-if="item.icon === 'calendar'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              {{ item.label }}
-            </button>
+            <template v-for="item in navItems" :key="item.path">
+              <button v-if="!item.authOnly || authStore.isAuthenticated"
+                @click="navigateTo(item.path)"
+                :class="['px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5',
+                  isActive(item.path)
+                    ? 'bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/25'
+                    : 'text-[#4a6b58] hover:text-[#8fb89f] hover:bg-[#111a14] border border-transparent']">
+                <!-- Home icon -->
+                <svg v-if="item.icon === 'home'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <!-- Board icon -->
+                <svg v-else-if="item.icon === 'board'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+                <!-- Calendar icon -->
+                <svg v-else-if="item.icon === 'calendar'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <!-- Blog icon -->
+                <svg v-else-if="item.icon === 'blog'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                <!-- My Blog icon -->
+                <svg v-else-if="item.icon === 'myblog'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                {{ item.label }}
+              </button>
+            </template>
           </div>
         </div>
 
@@ -194,17 +202,21 @@ async function handleLogout() {
 
       <!-- Mobile Nav Menu -->
       <div v-if="mobileMenuOpen" class="sm:hidden border-t border-[#1a2820] bg-[#0a0f0b]/95 backdrop-blur-md px-4 py-3 flex flex-col gap-1">
-        <button v-for="item in navItems" :key="item.path"
-          @click="navigateTo(item.path)"
-          :class="['w-full px-3 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 text-left',
-            isActive(item.path)
-              ? 'bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/25'
-              : 'text-[#4a6b58] hover:text-[#8fb89f] hover:bg-[#111a14] border border-transparent']">
-          <svg v-if="item.icon === 'home'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-          <svg v-else-if="item.icon === 'board'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
-          <svg v-else-if="item.icon === 'calendar'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          {{ item.label }}
-        </button>
+        <template v-for="item in navItems" :key="item.path">
+          <button v-if="!item.authOnly || authStore.isAuthenticated"
+            @click="navigateTo(item.path)"
+            :class="['w-full px-3 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 text-left',
+              isActive(item.path)
+                ? 'bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/25'
+                : 'text-[#4a6b58] hover:text-[#8fb89f] hover:bg-[#111a14] border border-transparent']">
+            <svg v-if="item.icon === 'home'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <svg v-else-if="item.icon === 'board'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+            <svg v-else-if="item.icon === 'calendar'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <svg v-else-if="item.icon === 'blog'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            <svg v-else-if="item.icon === 'myblog'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            {{ item.label }}
+          </button>
+        </template>
       </div>
     </nav>
   </header>

@@ -33,9 +33,6 @@ onMounted(async () => {
   <navbar />
   <div class="min-h-screen bg-[#070c09] text-white font-sans">
     <div class="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-
-      <Header />
-
       <div class="mt-4 sm:mt-6">
         <router-view />
       </div>

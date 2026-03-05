@@ -197,6 +197,8 @@ onMounted(async () => {
 </script>
 
 <template>
+  <Header />
+
   <div class="dashboard-root">
 
     <!-- Dashboard Layout: Sidebar + Main -->

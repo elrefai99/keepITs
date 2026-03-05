@@ -39,7 +39,7 @@ import { useNotifications } from '../shared/useNotifications';
 
 <template>
   <!-- App Header -->
-  <div class="bg-[#0a0f0b] border-b border-[#1a2820] px-4 sm:px-6 py-4 sm:py-5">
+  <div class="home-header bg-[#0a0f0b] border-b border-[#1a2820] px-4 sm:px-6 py-4 sm:py-5">
     <div class="flex items-center justify-between flex-wrap gap-3">
 
       <!-- Title block -->
@@ -141,3 +141,15 @@ import { useNotifications } from '../shared/useNotifications';
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Break out of App.vue's padded container so header goes full-width edge-to-edge */
+.home-header {
+  margin: -1rem -0.75rem 0;
+}
+@media (min-width: 640px) {
+  .home-header {
+    margin: -1.5rem -1rem 0;
+  }
+}
+</style>
