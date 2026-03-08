@@ -17,31 +17,31 @@ const routes = [
           component: () => import('../pages/CalendarPage.vue')
      },
      // ── Blog routes (static paths BEFORE dynamic :id) ────────────────────────
-     {
-          path: '/blogs',
-          name: 'PublicBlogs',
-          component: () => import('../pages/BlogPublicPage.vue')
-     },
-     {
-          path: '/blogs/my',
-          name: 'MyBlogs',
-          component: () => import('../pages/MyBlogsPage.vue')
-     },
-     {
-          path: '/blogs/create',
-          name: 'BlogCreate',
-          component: () => import('../pages/BlogCreatePage.vue')
-     },
-     {
-          path: '/blogs/edit/:id',
-          name: 'BlogEdit',
-          component: () => import('../pages/BlogCreatePage.vue')
-     },
-     {
-          path: '/blogs/:id',
-          name: 'BlogView',
-          component: () => import('../pages/BlogViewPage.vue')
-     }
+     // {
+     //      path: '/blogs',
+     //      name: 'PublicBlogs',
+     //      component: () => import('../pages/BlogPublicPage.vue')
+     // },
+     // {
+     //      path: '/blogs/my',
+     //      name: 'MyBlogs',
+     //      component: () => import('../pages/MyBlogsPage.vue')
+     // },
+     // {
+     //      path: '/blogs/create',
+     //      name: 'BlogCreate',
+     //      component: () => import('../pages/BlogCreatePage.vue')
+     // },
+     // {
+     //      path: '/blogs/edit/:id',
+     //      name: 'BlogEdit',
+     //      component: () => import('../pages/BlogCreatePage.vue')
+     // },
+     // {
+     //      path: '/blogs/:id',
+     //      name: 'BlogView',
+     //      component: () => import('../pages/BlogViewPage.vue')
+     // }
 ]
 
 const router = createRouter({
