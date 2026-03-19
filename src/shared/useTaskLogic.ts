@@ -5,18 +5,9 @@ import { addDaysToDate, DEFAULT_TASK_START_TIME, DEFAULT_TASK_END_TIME } from '.
 export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any, currentTime: any) {
      const showAddForm = ref(false)
      const editingTaskId = ref<string | null>(null)
+     // Tracks the ORIGINAL date key of the task being edited (may differ from selectedDate for multi-day tasks)
+     const editingTaskDateKey = ref<string | null>(null)
      const showTodoList = ref(false)
-
-     const getNowHHMM = (): string => {
-          const now = new Date()
-          return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-     }
-
-     const getOneHourLaterHHMM = (): string => {
-          const now = new Date()
-          now.setHours(now.getHours() + 1)
-          return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-     }
 
      const newTask = ref<any>({
           title: '',
@@ -164,7 +155,11 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
      const handleAddTask = () => {
           if (!newTask.value.title || !selectedDate.value) return
 
-          const dateKey = formatDate(selectedDate.value)
+          // For updates, use the task's ORIGINAL stored date (not the currently selected date)
+          // This fixes the bug where multi-day tasks couldn't be updated when viewed on a non-start date
+          const dateKey = editingTaskId.value
+               ? (editingTaskDateKey.value || formatDate(selectedDate.value))
+               : formatDate(selectedDate.value)
 
           const guests = (newTask.value.guestEmailsText || '')
                .split(/[,;]+/)
@@ -224,10 +219,14 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           }
           showAddForm.value = false
           editingTaskId.value = null
+          editingTaskDateKey.value = null
      }
 
      const handleEditTask = (task: any, forDateKey?: string) => {
           editingTaskId.value = task.id
+          // Capture the task's original stored date for correct update routing
+          editingTaskDateKey.value = task.date || task.startDate || forDateKey || null
+
           const durationDays = task.durationDays || 1
           const dailyTimes: Record<string, { time: string; endTime: string }> = { ...(task.dailyTimes || {}) }
 
@@ -329,6 +328,7 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
      return {
           showAddForm,
           editingTaskId,
+          editingTaskDateKey,
           showTodoList,
           newTask,
           endDatePreview,

@@ -32,3 +32,4 @@ coverage
 .env.dev
 sw.js
 workbox-c28420ab.js
+CLAUDE.md
