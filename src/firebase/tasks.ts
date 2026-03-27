@@ -36,6 +36,9 @@ export interface Task {
      meetingType?: 'none' | 'google' | 'teams' | 'custom'
      meetingUrl?: string
      guestEmails?: string[]
+     boardStatus?: 'spec-needed' | 'todo' | 'in-progress' | 'blocked' | 'in-review' | 'done'
+     ticketNumber?: number
+     comments?: Array<{ id: string; text: string; createdAt: string }>
      createdAt?: any
      updatedAt?: any
 }

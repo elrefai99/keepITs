@@ -6,7 +6,8 @@ export const useScheduleStore = defineStore('schedule', {
      state: () => ({
           schedules: {} as Record<string, any[]>,
           loading: false,
-          synced: false
+          synced: false,
+          _nextTicketNumber: 1
      }),
 
      getters: {
@@ -83,6 +84,13 @@ export const useScheduleStore = defineStore('schedule', {
                          })
                     })
 
+                    // Seed ticket number counter from existing data
+                    let maxTicket = 0
+                    tasks.forEach((task: any) => {
+                         if (task.ticketNumber && task.ticketNumber > maxTicket) maxTicket = task.ticketNumber
+                    })
+                    this._nextTicketNumber = maxTicket + 1
+
                     this.synced = true
                } catch (error) {
                     console.error('Error loading tasks:', error)
@@ -115,6 +123,9 @@ export const useScheduleStore = defineStore('schedule', {
 
                const newTask = {
                     id: Date.now().toString(),
+                    ticketNumber: this._nextTicketNumber++,
+                    boardStatus: task.boardStatus || 'todo',
+                    comments: [],
                     ...task,
                     date: dateKey,
                     startDate,
@@ -212,6 +223,53 @@ export const useScheduleStore = defineStore('schedule', {
                               console.error('Error deleting task from Firebase:', error)
                               if (taskToDelete) {
                                    this.schedules[dateKey].push(taskToDelete)
+                              }
+                         }
+                    }
+               }
+          },
+
+          async updateBoardStatus(dateKey: string, taskId: string, boardStatus: string) {
+               const authStore = useAuthStore()
+               const tasks = this.schedules[dateKey]
+               if (tasks) {
+                    const task = tasks.find(t => t.id === taskId)
+                    if (task) {
+                         const prevStatus = task.boardStatus
+                         task.boardStatus = boardStatus
+                         // sync completed: done → true, leaving done → false
+                         if (boardStatus === 'done') task.completed = true
+                         else if (prevStatus === 'done') task.completed = false
+                         if (authStore.user) {
+                              try {
+                                   const { date, userId, ...taskToSave } = task
+                                   await saveTask(authStore.user.uid, dateKey, taskToSave)
+                              } catch (error) {
+                                   console.error('Error updating board status:', error)
+                              }
+                         }
+                    }
+               }
+          },
+
+          async addComment(dateKey: string, taskId: string, text: string) {
+               const authStore = useAuthStore()
+               const tasks = this.schedules[dateKey]
+               if (tasks) {
+                    const task = tasks.find(t => t.id === taskId)
+                    if (task) {
+                         if (!task.comments) task.comments = []
+                         task.comments.push({
+                              id: Date.now().toString(),
+                              text,
+                              createdAt: new Date().toISOString()
+                         })
+                         if (authStore.user) {
+                              try {
+                                   const { date, userId, ...taskToSave } = task
+                                   await saveTask(authStore.user.uid, dateKey, taskToSave)
+                              } catch (error) {
+                                   console.error('Error saving comment:', error)
                               }
                          }
                     }
