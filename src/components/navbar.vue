@@ -33,7 +33,8 @@ const userInitials = computed(() => {
 const navItems = [
   { path: '/', label: 'Home', icon: 'home' },
   { path: '/board', label: 'Board', icon: 'board' },
-  { path: '/calendar', label: 'Calendar', icon: 'calendar' }
+  { path: '/calendar', label: 'Calendar', icon: 'calendar' },
+  { path: '/projects', label: 'Projects', icon: 'projects' }
 ]
 
 const isActive = (path: string) => route.path === path
@@ -144,6 +145,8 @@ async function handleLogout() {
                 <svg v-else-if="item.icon === 'board'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
                 <!-- Calendar icon -->
                 <svg v-else-if="item.icon === 'calendar'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <!-- Projects icon -->
+                <svg v-else-if="item.icon === 'projects'" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h3l2 3h9a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
                 {{ item.label }}
               </button>
             </template>
@@ -205,6 +208,7 @@ async function handleLogout() {
             <svg v-if="item.icon === 'home'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             <svg v-else-if="item.icon === 'board'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
             <svg v-else-if="item.icon === 'calendar'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <svg v-else-if="item.icon === 'projects'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h3l2 3h9a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
             {{ item.label }}
           </button>
         </template>

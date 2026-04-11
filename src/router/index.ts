@@ -16,6 +16,11 @@ const routes = [
           name: 'Calendar',
           component: () => import('../pages/CalendarPage.vue')
      },
+     {
+          path: '/projects',
+          name: 'Projects',
+          component: () => import('../pages/ProjectsPage.vue')
+     },
 ]
 
 const router = createRouter({

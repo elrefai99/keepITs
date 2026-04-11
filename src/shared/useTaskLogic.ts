@@ -20,7 +20,8 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           guestEmailsText: '',
           durationDays: 1,
           useTimeRange: true,
-          dailyTimes: {} as Record<string, { time: string; endTime: string }>
+          dailyTimes: {} as Record<string, { time: string; endTime: string }>,
+          projectId: ''
      })
 
 
@@ -215,7 +216,8 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
                guestEmailsText: '',
                durationDays: 1,
                useTimeRange: true,
-               dailyTimes: {}
+               dailyTimes: {},
+               projectId: ''
           }
           showAddForm.value = false
           editingTaskId.value = null
@@ -257,7 +259,8 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
                durationDays,
                startDate: task.startDate,
                useTimeRange: true,
-               dailyTimes
+               dailyTimes,
+               projectId: task.projectId || ''
           }
           showAddForm.value = true
      }

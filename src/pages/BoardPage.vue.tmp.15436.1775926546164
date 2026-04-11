@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useScheduleStore } from '../stores/store'
 import { useProjectsStore } from '../stores/projects'
+import { PROJECT_COLORS } from '../firebase/projects'
 import { formatDate, isDateDisabled } from '../utils/dateUtils'
 import { useCalendar } from '../shared/useCalendar'
 import { useTaskLogic } from '../shared/useTaskLogic'

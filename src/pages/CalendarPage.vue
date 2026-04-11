@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useScheduleStore } from '../stores/store'
+import { useProjectsStore } from '../stores/projects'
 import { formatDate, formatHour, isDateDisabled, weekDays } from '../utils/dateUtils'
 import { getHourSlotHeight, getTaskPosition } from '../utils/calendarUtils'
 import { useCalendar } from '../shared/useCalendar'
 import { useTaskLogic } from '../shared/useTaskLogic'
 
 const store = useScheduleStore()
+const projectsStore = useProjectsStore()
 const currentTime = ref(new Date())
 
 const {
@@ -91,6 +93,7 @@ const currentTimeLabel = computed(() => {
 
 onMounted(async () => {
   if (!store.synced) await store.loadUserTasks()
+  if (!projectsStore.synced) await projectsStore.loadUserProjects()
   setInterval(() => { currentTime.value = new Date(); checkAndCompletePassedTasks() }, 1000)
 })
 </script>
@@ -258,13 +261,12 @@ onMounted(async () => {
           <!-- Date grid -->
           <div class="grid grid-cols-7">
             <div v-for="(day, index) in displayedCalendarDays" :key="index"
-              @click="day && !isDateDisabled(day) && calendarHandleDateClick(day)"
+              @click="day && calendarHandleDateClick(day)"
               :class="['min-h-16 sm:min-h-24 md:min-h-28 p-1 sm:p-1.5 border-b border-r border-[#131e17] transition-all cursor-pointer relative group',
                 !day ? 'bg-transparent cursor-default' : '',
                 day && formatDate(day) === todayFormatted ? 'bg-[#4ade80]/[0.03]' : '',
                 day && selectedDate && formatDate(day) === formatDate(selectedDate) ? 'bg-[#4ade80]/[0.05]' : '',
-                day && !isDateDisabled(day) ? 'hover:bg-[#111a14]' : '',
-                day && isDateDisabled(day) ? 'opacity-40' : '']">
+                day && isDateDisabled(day) ? 'bg-[#0a0e0b]' : 'hover:bg-[#111a14]']">
               <template v-if="day">
                 <!-- Date number -->
                 <div class="flex items-start justify-between mb-1">
@@ -273,7 +275,9 @@ onMounted(async () => {
                       ? 'bg-[#4ade80] text-[#070c09] shadow-sm shadow-[#4ade80]/30'
                       : selectedDate && formatDate(day) === formatDate(selectedDate)
                         ? 'bg-[#4ade80]/20 text-[#4ade80] ring-1 ring-[#4ade80]/40'
-                        : 'text-[#8fb89f] group-hover:text-[#c8ddd5]']">
+                        : isDateDisabled(day)
+                          ? 'text-[#3d5a4a]'
+                          : 'text-[#8fb89f] group-hover:text-[#c8ddd5]']">
                     {{ day.getDate() }}
                   </span>
                 </div>
@@ -603,6 +607,33 @@ onMounted(async () => {
                   class="px-3 py-2 rounded-lg bg-[#132218] border border-[#2a4035] text-[#4ade80] text-xs font-semibold hover:bg-[#1a3020] active:scale-95 transition-all whitespace-nowrap">GCal</button>
               </div>
             </template>
+          </div>
+        </div>
+
+        <!-- Project -->
+        <div v-if="projectsStore.projects.length > 0" class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+          <div class="px-3.5 py-2 border-b border-[#131e17]">
+            <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Project</span>
+          </div>
+          <div class="px-3.5 py-3 flex flex-wrap gap-2">
+            <button @click="newTask.projectId = ''"
+              :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-semibold border transition-all',
+                !newTask.projectId
+                  ? 'bg-[#132218] border-[#2a4035] text-[#c8ddd5]'
+                  : 'bg-transparent border-[#1a2820] text-[#4a6b58] hover:border-[#2a4035] hover:text-[#8fb89f]']">
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+              None
+            </button>
+            <button v-for="project in projectsStore.projects" :key="project.id"
+              @click="newTask.projectId = project.id"
+              :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-semibold border transition-all',
+                newTask.projectId === project.id
+                  ? 'border-transparent text-[#070c09] font-bold'
+                  : 'bg-transparent border-[#1a2820] text-[#4a6b58] hover:border-[#2a4035] hover:text-[#8fb89f]']"
+              :style="newTask.projectId === project.id ? { background: project.color } : {}">
+              <div v-if="newTask.projectId !== project.id" class="w-2 h-2 rounded-full flex-shrink-0" :style="{ background: project.color }" />
+              {{ project.name }}
+            </button>
           </div>
         </div>
 

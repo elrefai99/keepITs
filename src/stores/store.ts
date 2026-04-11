@@ -37,6 +37,17 @@ export const useScheduleStore = defineStore('schedule', {
                return results
           },
 
+          /** Returns all tasks belonging to a specific project (across all dates) */
+          getTasksForProject: (state) => (projectId: string) => {
+               const results: any[] = []
+               for (const tasks of Object.values(state.schedules)) {
+                    for (const task of tasks) {
+                         if (task.projectId === projectId) results.push(task)
+                    }
+               }
+               return results
+          },
+
           /**
            * Returns effective {time, endTime} for a task on a specific date.
            * Multi-day tasks can have per-day overrides in dailyTimes.
