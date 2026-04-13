@@ -287,6 +287,51 @@ export const useScheduleStore = defineStore('schedule', {
                }
           },
 
+          async moveTaskToNextDay(dateKey: string, taskId: string) {
+               const authStore = useAuthStore()
+               const tasks = this.schedules[dateKey]
+               if (!tasks) return
+               const task = tasks.find((t: any) => t.id === taskId)
+               if (!task || task.completed) return
+
+               const tomorrow = addDaysToDate(dateKey, 1)
+
+               // Remove from today locally and in Firestore
+               this.schedules[dateKey] = tasks.filter((t: any) => t.id !== taskId)
+               if (authStore.user) {
+                    try {
+                         await deleteTaskFromFirebase(authStore.user.uid, dateKey, taskId)
+                    } catch (error) {
+                         console.error('Error deleting task when moving to next day:', error)
+                    }
+               }
+
+               // Create copy for tomorrow with new ID
+               const newTask = {
+                    ...task,
+                    id: Date.now().toString(),
+                    date: tomorrow,
+                    startDate: tomorrow,
+                    endDate: task.durationDays && task.durationDays > 1
+                         ? addDaysToDate(tomorrow, (task.durationDays || 1) - 1)
+                         : tomorrow,
+                    completed: false,
+                    order: (this.schedules[tomorrow]?.length || 0)
+               }
+
+               if (!this.schedules[tomorrow]) this.schedules[tomorrow] = []
+               this.schedules[tomorrow].push(newTask)
+
+               if (authStore.user) {
+                    try {
+                         const { date, userId, ...taskToSave } = newTask as any
+                         await saveTask(authStore.user.uid, tomorrow, taskToSave)
+                    } catch (error) {
+                         console.error('Error saving moved task to next day:', error)
+                    }
+               }
+          },
+
           async reorderTasks(dateKey: string, taskIds: string[]) {
                const authStore = useAuthStore()
 

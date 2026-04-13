@@ -3,6 +3,8 @@ import { getCurrentTimeString, formatDate } from '../utils/dateUtils'
 
 export function useNotifications(store: any, todayFormatted: any, isBreakTime: any) {
      const notifiedTasks = ref<Set<string>>(new Set())
+     // Tracks tasks already processed at end-time (to avoid repeated actions every second)
+     const endTimeProcessedTasks = ref<Set<string>>(new Set())
      const lastBreakNotification = ref<number>(0)
 
      // Create audio context for notification sounds
@@ -107,6 +109,76 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
           })
      }
 
+     // Urgent multi-beep sound for critical tasks
+     const playCriticalSound = () => {
+          try {
+               const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+               if (!AudioContextClass) return
+               const audioContext = new AudioContextClass()
+               const times = [0, 0.25, 0.5]
+               times.forEach((offset) => {
+                    const osc = audioContext.createOscillator()
+                    const gain = audioContext.createGain()
+                    osc.connect(gain)
+                    gain.connect(audioContext.destination)
+                    osc.frequency.setValueAtTime(880, audioContext.currentTime + offset)
+                    gain.gain.setValueAtTime(0.5, audioContext.currentTime + offset)
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + offset + 0.2)
+                    osc.start(audioContext.currentTime + offset)
+                    osc.stop(audioContext.currentTime + offset + 0.2)
+               })
+          } catch (error) {
+               console.warn('Could not play critical sound:', error)
+          }
+     }
+
+     // Called every second from App.vue — handles end-time for uncompleted tasks
+     const checkTaskEndTimes = () => {
+          const dateKey = todayFormatted.value
+          const tasks = store.getTasksForDate(dateKey)
+               .filter((task: any) => !task.completed && task.endTime)
+
+          if (tasks.length === 0) return
+
+          const now = new Date()
+          const currentTimeStr = getCurrentTimeString(now)
+          const [currentHour, currentMin] = currentTimeStr.split(':').map(Number)
+          const currentTotalMinutes = currentHour * 60 + currentMin
+
+          tasks.forEach((task: any) => {
+               const processKey = `${task.id}_${task.endTime}`
+               if (endTimeProcessedTasks.value.has(processKey)) return
+
+               const [endHour, endMin] = (task.endTime as string).split(':').map(Number)
+               const endTotalMinutes = endHour * 60 + endMin
+
+               // Trigger exactly at end time (within the current minute)
+               if (currentTotalMinutes !== endTotalMinutes) return
+
+               endTimeProcessedTasks.value.add(processKey)
+
+               const priority = task.priority || 'medium'
+
+               if (priority === 'critical') {
+                    // Play urgent sound and notify — do NOT move the task
+                    playCriticalSound()
+                    const message = `⚠️ Critical task time ended: "${task.title}" — please mark it done or it will remain open.`
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                         new Notification('KeepITs — Critical Task', { body: message })
+                    } else if ('Notification' in window && Notification.permission !== 'denied') {
+                         Notification.requestPermission().then(permission => {
+                              if (permission === 'granted') {
+                                   new Notification('KeepITs — Critical Task', { body: message })
+                              }
+                         })
+                    }
+               } else {
+                    // medium / low — silently move to next day
+                    store.moveTaskToNextDay(dateKey, task.id)
+               }
+          })
+     }
+
      // Reset notified tasks at the start of each day
      const checkDayChange = () => {
           const todayKey = formatDate(new Date())
@@ -114,6 +186,7 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
 
           if (storedDay !== todayKey) {
                notifiedTasks.value.clear()
+               endTimeProcessedTasks.value.clear()
                localStorage.setItem('lastNotificationDay', todayKey)
           }
      }
@@ -123,6 +196,7 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
           playNotificationSound,
           showNotification,
           checkUpcomingTasks,
+          checkTaskEndTimes,
           checkDayChange
      }
 }

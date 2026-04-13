@@ -14,7 +14,7 @@ const { currentActiveTask, checkAndCompletePassedTasks } = useTaskLogic(store, s
 const triggerNotification = ref(() => {})
 const onTimerComplete = () => { triggerNotification.value() }
 const { isBreakTime } = useTimer(currentActiveTask, onTimerComplete)
-const { checkUpcomingTasks, checkDayChange, showNotification } = useNotifications(store, todayFormatted, isBreakTime)
+const { checkUpcomingTasks, checkTaskEndTimes, checkDayChange, showNotification } = useNotifications(store, todayFormatted, isBreakTime)
 triggerNotification.value = showNotification
 
 onMounted(async () => {
@@ -24,6 +24,7 @@ onMounted(async () => {
     currentTime.value = new Date()
     checkAndCompletePassedTasks()
     checkUpcomingTasks()
+    checkTaskEndTimes()
   }, 1000)
   setInterval(checkDayChange, 60000)
 })

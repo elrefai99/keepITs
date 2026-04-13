@@ -39,6 +39,7 @@ export interface Task {
      boardStatus?: 'spec-needed' | 'todo' | 'in-progress' | 'blocked' | 'in-review' | 'done'
      ticketNumber?: number
      comments?: Array<{ id: string; text: string; createdAt: string }>
+     priority?: 'critical' | 'medium' | 'low'
      projectId?: string
      createdAt?: any
      updatedAt?: any

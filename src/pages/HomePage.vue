@@ -36,7 +36,6 @@ const getTaskStatus = (task: any): string => {
   const startMinutes = task.time ? getMinutesFromTime(task.time) : 0
   const endMinutes = task.endTime ? getMinutesFromTime(task.endTime) : startMinutes + 60
   if (task.completed) return 'completed'
-  if (currentMinutes > endMinutes) return 'completed'
   if (currentMinutes >= startMinutes && currentMinutes <= endMinutes) return 'active'
   if (task.meetingUrl) return 'prioritized'
   return 'waiting'
@@ -290,6 +289,8 @@ onMounted(async () => {
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-sm font-semibold text-[#c8ddd5] truncate">{{ task.title }}</span>
               <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-yellow-400/15 text-yellow-300 border border-yellow-400/20 flex-shrink-0">Active</span>
+              <span v-if="task.priority === 'critical'" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/25 flex-shrink-0">Critical</span>
+              <span v-else-if="task.priority === 'low'" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#4ade80]/10 text-[#4ade80]/80 border border-[#4ade80]/20 flex-shrink-0">Low</span>
               <span v-if="task.meetingUrl" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-400/15 text-blue-300 border border-blue-400/20 flex-shrink-0">Meeting</span>
               <span v-if="task.durationDays > 1" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-400/15 text-purple-300 border border-purple-400/20 flex-shrink-0">Multi-day</span>
             </div>
@@ -345,6 +346,8 @@ onMounted(async () => {
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-sm font-semibold text-[#c8ddd5] truncate">{{ task.title }}</span>
+              <span v-if="task.priority === 'critical'" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/25 flex-shrink-0">Critical</span>
+              <span v-else-if="task.priority === 'low'" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#4ade80]/10 text-[#4ade80]/80 border border-[#4ade80]/20 flex-shrink-0">Low</span>
               <span v-if="task.meetingUrl" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-400/15 text-blue-300 border border-blue-400/20 flex-shrink-0">Meeting</span>
               <span v-if="task.durationDays > 1" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-400/15 text-purple-300 border border-purple-400/20 flex-shrink-0">Multi-day</span>
             </div>
@@ -442,6 +445,12 @@ onMounted(async () => {
                 class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#4ade80]/15 text-[#4ade80] border border-[#4ade80]/20">Completed</span>
               <span v-else
                 class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-400/15 text-blue-300 border border-blue-400/20">Upcoming</span>
+              <span v-if="selectedTask.priority === 'critical'"
+                class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/25">Critical</span>
+              <span v-else-if="selectedTask.priority === 'medium'"
+                class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-400/80 border border-amber-500/20">Medium</span>
+              <span v-else-if="selectedTask.priority === 'low'"
+                class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#4ade80]/10 text-[#4ade80]/80 border border-[#4ade80]/20">Low</span>
               <span v-if="selectedTask.meetingUrl"
                 class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/20">Meeting</span>
             </div>
@@ -613,6 +622,36 @@ onMounted(async () => {
               <input v-model="newTask.endTime" type="time"
                 class="w-full p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm outline-none focus:border-[#4ade80]/40 transition-all" />
             </div>
+          </div>
+        </div>
+
+        <!-- Priority -->
+        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+          <div class="px-3.5 py-2 border-b border-[#131e17]">
+            <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Priority</span>
+          </div>
+          <div class="px-3.5 py-3 flex gap-2">
+            <button type="button" @click="newTask.priority = 'critical'"
+              :class="['flex-1 py-2 rounded-lg text-xs font-bold border transition-all',
+                newTask.priority === 'critical'
+                  ? 'bg-red-500/20 border-red-500/50 text-red-400'
+                  : 'bg-[#0d1410] border-[#1f3228] text-[#4a6b58] hover:border-red-800/40 hover:text-red-500/70']">
+              Critical
+            </button>
+            <button type="button" @click="newTask.priority = 'medium'"
+              :class="['flex-1 py-2 rounded-lg text-xs font-bold border transition-all',
+                newTask.priority === 'medium'
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                  : 'bg-[#0d1410] border-[#1f3228] text-[#4a6b58] hover:border-amber-700/40 hover:text-amber-500/70']">
+              Medium
+            </button>
+            <button type="button" @click="newTask.priority = 'low'"
+              :class="['flex-1 py-2 rounded-lg text-xs font-bold border transition-all',
+                newTask.priority === 'low'
+                  ? 'bg-[#4ade80]/15 border-[#4ade80]/40 text-[#4ade80]'
+                  : 'bg-[#0d1410] border-[#1f3228] text-[#4a6b58] hover:border-[#2a5035]/60 hover:text-[#4ade80]/60']">
+              Low
+            </button>
           </div>
         </div>
 

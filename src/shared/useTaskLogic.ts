@@ -15,6 +15,7 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           endTime: DEFAULT_TASK_END_TIME,
           description: '',
           completed: false,
+          priority: 'medium' as 'critical' | 'medium' | 'low',
           meetingType: 'none',
           meetingUrl: '',
           guestEmailsText: '',
@@ -77,18 +78,10 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
                if (task.completed) {
                     ended.push(task)
                } else if (isToday) {
-                    // Multi-day task on its start date: don't auto-end unless it's also the last day
-                    const isMultiDay = task.durationDays && task.durationDays > 1
-                    const isLastDay = !isMultiDay || (task.endDate && dateKey >= task.endDate)
-
-                    if (isLastDay && currentMinutes > endMinutes) {
-                         ended.push(task)
-                    } else if (currentMinutes >= startMinutes && currentMinutes <= endMinutes) {
+                    if (currentMinutes >= startMinutes && currentMinutes <= endMinutes) {
                          workedOn.push(task)
-                    } else if (currentMinutes > endMinutes && isMultiDay && !isLastDay) {
-                         // Multi-day task, today's time slot passed but task continues on future days
-                         willStart.push(task)
                     } else {
+                         // Past end time but not completed — keep in willStart (not auto-ended)
                          willStart.push(task)
                     }
                } else {
@@ -126,31 +119,10 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           }) || null
      })
 
+     // Tasks are no longer auto-completed when their end time passes.
+     // End-time handling (notify critical / move others to next day) is done in useNotifications.checkTaskEndTimes.
      const checkAndCompletePassedTasks = () => {
-          const dateKey = todayFormatted.value
-          const tasks = store.getTasksForDate(dateKey)
-          const currentTimeStr = getCurrentTimeString(currentTime.value)
-          const currentMinutes = getMinutesFromTime(currentTimeStr)
-
-          tasks.forEach((task: any) => {
-               if (!task.completed && task.time) {
-                    // Multi-day tasks: only auto-complete on the LAST day
-                    if (task.durationDays && task.durationDays > 1 && task.endDate) {
-                         if (dateKey < task.endDate) {
-                              // Not the last day yet — don't auto-complete
-                              return
-                         }
-                    }
-
-                    // Use per-day time override if available (for multi-day tasks)
-                    const { time: effectiveTime, endTime: effectiveEndTime } = store.getTaskTimeForDate(task, dateKey)
-                    const startMinutes = getMinutesFromTime(effectiveTime)
-                    const endMinutes = effectiveEndTime ? getMinutesFromTime(effectiveEndTime) : startMinutes + 60
-                    if (currentMinutes > endMinutes) {
-                         store.toggleTaskComplete(dateKey, task.id)
-                    }
-               }
-          })
+          // intentionally empty — kept for API compatibility
      }
 
      const handleAddTask = () => {
@@ -211,6 +183,7 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
                endTime: DEFAULT_TASK_END_TIME,
                description: '',
                completed: false,
+               priority: 'medium',
                meetingType: 'none',
                meetingUrl: '',
                guestEmailsText: '',
@@ -253,6 +226,7 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
                endTime: editEndTime,
                description: task.description || '',
                completed: task.completed,
+               priority: task.priority || 'medium',
                meetingType: task.meetingType || 'none',
                meetingUrl: task.meetingUrl || '',
                guestEmailsText: (task.guestEmails || []).join(', '),
