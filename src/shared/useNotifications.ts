@@ -69,11 +69,11 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
      }
 
      // Check for upcoming tasks and play notification
+     // Includes multi-day tasks scheduled for today via their per-day work hour.
      const checkUpcomingTasks = () => {
           const dateKey = todayFormatted.value
-          const tasks = store.getTasksForDate(dateKey)
+          const tasks = store.getTasksSpanningDate(dateKey)
                .filter((task: any) => !task.completed)
-               .sort((a: any, b: any) => (a.time || '99:99').localeCompare(b.time || '99:99'))
 
           if (tasks.length === 0) return
 
@@ -83,16 +83,21 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
           const currentTotalMinutes = currentHour * 60 + currentMin
 
           tasks.forEach((task: any) => {
-               // Skip if already notified
-               if (notifiedTasks.value.has(task.id)) return
+               // Effective start time for THIS day (multi-day tasks have per-day overrides)
+               const { time } = store.getTaskTimeForDate(task, dateKey)
+               if (!time) return
 
-               const [taskHour, taskMin] = task.time.split(':').map(Number)
+               // Dedupe per task per day so multi-day tasks notify on each work day
+               const notifyKey = `${task.id}_${dateKey}`
+               if (notifiedTasks.value.has(notifyKey)) return
+
+               const [taskHour, taskMin] = time.split(':').map(Number)
                const taskTotalMinutes = taskHour * 60 + taskMin
 
                // Play sound exactly when task time is reached
                if (taskTotalMinutes === currentTotalMinutes) {
                     playNotificationSound('task')
-                    notifiedTasks.value.add(task.id)
+                    notifiedTasks.value.add(notifyKey)
 
                     // Show notification
                     const message = `Task starting now: ${task.title}`
@@ -135,8 +140,8 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
      // Called every second from App.vue — handles end-time for uncompleted tasks
      const checkTaskEndTimes = () => {
           const dateKey = todayFormatted.value
-          const tasks = store.getTasksForDate(dateKey)
-               .filter((task: any) => !task.completed && task.endTime)
+          const tasks = store.getTasksSpanningDate(dateKey)
+               .filter((task: any) => !task.completed)
 
           if (tasks.length === 0) return
 
@@ -146,10 +151,14 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
           const currentTotalMinutes = currentHour * 60 + currentMin
 
           tasks.forEach((task: any) => {
-               const processKey = `${task.id}_${task.endTime}`
+               // Effective end time for THIS day (per-day override for multi-day tasks)
+               const { endTime } = store.getTaskTimeForDate(task, dateKey)
+               if (!endTime) return
+
+               const processKey = `${task.id}_${dateKey}_${endTime}`
                if (endTimeProcessedTasks.value.has(processKey)) return
 
-               const [endHour, endMin] = (task.endTime as string).split(':').map(Number)
+               const [endHour, endMin] = endTime.split(':').map(Number)
                const endTotalMinutes = endHour * 60 + endMin
 
                // Trigger exactly at end time (within the current minute)
@@ -158,6 +167,7 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
                endTimeProcessedTasks.value.add(processKey)
 
                const priority = task.priority || 'medium'
+               const isMultiDay = task.durationDays && task.durationDays > 1
 
                if (priority === 'critical') {
                     // Play urgent sound and notify — do NOT move the task
@@ -172,8 +182,9 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
                               }
                          })
                     }
-               } else {
-                    // medium / low — silently move to next day
+               } else if (!isMultiDay) {
+                    // medium / low single-day task — silently move to next day.
+                    // Multi-day tasks keep their own work-day plan, so don't move them.
                     store.moveTaskToNextDay(dateKey, task.id)
                }
           })

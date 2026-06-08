@@ -767,15 +767,15 @@ onMounted(async () => {
     </div>
   </div>
 
-  <!-- ══ START TASK MODAL ════════════════════════════════════════════════════ -->
+  <!-- ══ START TASK MODAL — pick work days + per-day hour ════════════════════ -->
   <div v-if="showStartForm"
     class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4"
     @click.self="cancelStartTask">
-    <div class="bg-[#0d1a11]/85 backdrop-blur-xl border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/80 w-full max-w-md">
-      <div class="border-b border-[#1f3228] px-5 pt-4 pb-3.5 flex items-start justify-between">
+    <div class="bg-[#0d1a11]/85 backdrop-blur-xl border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/80 w-full max-w-md max-h-[95vh] overflow-y-auto">
+      <div class="sticky top-0 z-10 bg-[#0d1a11]/95 backdrop-blur-sm border-b border-[#1f3228] px-5 pt-4 pb-3.5 flex items-start justify-between rounded-t-2xl">
         <div>
-          <h3 class="text-base font-bold text-[#c8ddd5]">Start Task</h3>
-          <p class="text-[10px] text-[#3d5a4a] mt-0.5">Start now — pick when it should end</p>
+          <h3 class="text-base font-bold text-[#c8ddd5]">Schedule Task</h3>
+          <p class="text-[10px] text-[#3d5a4a] mt-0.5">Pick the days you'll work — set the hour for each</p>
         </div>
         <button @click="cancelStartTask"
           class="w-8 h-8 flex items-center justify-center rounded-xl bg-[#132218] border border-[#1f3228] text-[#4a6b58] hover:text-white hover:border-[#2a4035] active:scale-95 transition-all">
@@ -783,34 +783,73 @@ onMounted(async () => {
         </button>
       </div>
       <div class="p-5 flex flex-col gap-3.5">
-        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl px-3.5 py-3">
-          <p class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest mb-1">Starts</p>
-          <p class="text-sm font-bold text-[#4ade80] font-mono">Now · {{ todayFormatted }} {{ currentTimeFormatted }}</p>
+
+        <!-- Calendar: choose work days -->
+        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+          <div class="px-3.5 py-2.5 border-b border-[#131e17] flex items-center justify-between">
+            <button @click="moveStartMonth(-1)"
+              class="w-7 h-7 flex items-center justify-center rounded-lg bg-[#132218] border border-[#1f3228] text-[#4a6b58] hover:text-[#4ade80] hover:border-[#2a4035] active:scale-95 transition-all">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span class="text-xs font-bold text-[#c8ddd5] tracking-wide">{{ startCalendarTitle }}</span>
+            <button @click="moveStartMonth(1)"
+              class="w-7 h-7 flex items-center justify-center rounded-lg bg-[#132218] border border-[#1f3228] text-[#4a6b58] hover:text-[#4ade80] hover:border-[#2a4035] active:scale-95 transition-all">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+          <div class="px-3.5 py-3">
+            <!-- Weekday labels -->
+            <div class="grid grid-cols-7 gap-1 mb-1.5">
+              <div v-for="(d, i) in weekDayLabels" :key="i"
+                class="text-center text-[9px] font-bold text-[#2d4035] uppercase tracking-wider">{{ d }}</div>
+            </div>
+            <!-- Day cells -->
+            <div class="grid grid-cols-7 gap-1">
+              <template v-for="(cell, i) in startCalendarCells" :key="i">
+                <div v-if="!cell.day" />
+                <button v-else
+                  type="button"
+                  :disabled="isPastDay(cell.dateKey)"
+                  @click="toggleWorkDay(cell.dateKey!)"
+                  :class="['aspect-square rounded-lg text-xs font-semibold transition-all flex items-center justify-center',
+                    isPastDay(cell.dateKey)
+                      ? 'text-[#1f2e25] cursor-not-allowed'
+                      : selectedWorkDays[cell.dateKey!]
+                        ? 'bg-[#4ade80] text-[#070c09] font-bold shadow-md shadow-[#4ade80]/20'
+                        : 'text-[#8fb89f] hover:bg-[#132218] hover:text-[#4ade80]']">
+                  {{ cell.day }}
+                </button>
+              </template>
+            </div>
+          </div>
         </div>
 
-        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
-          <div class="px-3.5 py-2 border-b border-[#131e17]">
-            <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">End</span>
+        <!-- Per-day hour pickers -->
+        <div v-if="selectedWorkDaysSorted.length > 0" class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+          <div class="px-3.5 py-2 border-b border-[#131e17] flex items-center justify-between">
+            <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Work hour per day</span>
+            <span class="text-[10px] font-bold text-[#4a6b58] bg-[#132218] px-1.5 py-0.5 rounded-full">{{ selectedWorkDaysSorted.length }}</span>
           </div>
-          <div class="px-3.5 py-3 flex flex-col sm:flex-row gap-3">
-            <div class="flex-1">
-              <div class="text-[9px] text-[#2d4035] mb-1.5 uppercase tracking-widest font-semibold">End date</div>
-              <input v-model="startForm.endDate" type="date"
-                class="w-full p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm outline-none focus:border-[#4ade80]/40 transition-all" />
-            </div>
-            <div class="flex-1">
-              <div class="text-[9px] text-[#2d4035] mb-1.5 uppercase tracking-widest font-semibold">End time</div>
-              <input v-model="startForm.endTime" type="time"
-                class="w-full p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm outline-none focus:border-[#4ade80]/40 transition-all" />
+          <div class="px-3.5 py-3 flex flex-col gap-2 max-h-48 overflow-y-auto">
+            <div v-for="item in selectedWorkDaysSorted" :key="item.date"
+              class="flex items-center gap-3">
+              <span class="flex-1 text-xs font-medium text-[#8fb89f] font-mono">{{ fmtWorkDayLabel(item.date) }}</span>
+              <input :value="item.time" @input="setWorkDayTime(item.date, ($event.target as HTMLInputElement).value)" type="time"
+                class="w-28 p-2 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm outline-none focus:border-[#4ade80]/40 transition-all" />
+              <button @click="toggleWorkDay(item.date)"
+                class="w-7 h-7 flex items-center justify-center rounded-lg bg-[#132218] border border-[#1f3228] text-[#4a6b58] hover:text-red-400 hover:border-red-800/40 active:scale-95 transition-all flex-shrink-0">
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
             </div>
           </div>
         </div>
+        <p v-else class="text-center text-xs text-[#3d5a4a] py-1">Tap a day above to schedule it.</p>
 
         <div class="flex gap-2.5 pt-0.5">
-          <button @click="confirmStartTask"
-            class="flex-1 py-3 rounded-xl font-bold text-sm bg-[#4ade80] text-[#070c09] hover:bg-[#22c55e] active:scale-[0.98] transition-all shadow-lg shadow-[#4ade80]/20 flex items-center justify-center gap-2">
+          <button @click="confirmStartTask" :disabled="selectedWorkDaysSorted.length === 0"
+            class="flex-1 py-3 rounded-xl font-bold text-sm bg-[#4ade80] text-[#070c09] hover:bg-[#22c55e] active:scale-[0.98] transition-all shadow-lg shadow-[#4ade80]/20 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Start Now
+            Schedule
           </button>
           <button @click="cancelStartTask"
             class="flex-1 py-3 rounded-xl font-semibold text-sm bg-[#0a0f0b] border border-[#1f3228] text-[#4a6b58] hover:border-[#2a4035] hover:text-[#8fb89f] active:scale-[0.98] transition-all">
