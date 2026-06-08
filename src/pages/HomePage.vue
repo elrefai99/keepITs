@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useScheduleStore } from '../stores/store'
-import { formatDate, getCurrentTimeString, getMinutesFromTime, isDateDisabled } from '../utils/dateUtils'
+import { formatDate, getCurrentTimeString, getMinutesFromTime } from '../utils/dateUtils'
 import { useCalendar } from '../shared/useCalendar'
 import { useTaskLogic } from '../shared/useTaskLogic'
 
@@ -16,17 +16,54 @@ const { selectedDate } = useCalendar()
 selectedDate.value = today
 
 const {
-  showAddForm, editingTaskId, newTask, endDatePreview,
+  showAddForm, editingTaskId, newTask,
   handleAddTask, handleEditTask, toggleComplete, deleteTaskItem,
-  openGoogleCalendarForTask
+  openGoogleCalendarForTask,
+  showStartForm, startCalendarMonth, selectedWorkDays, selectedWorkDaysSorted,
+  openStartTask, toggleWorkDay, setWorkDayTime, moveStartMonth,
+  cancelStartTask, confirmStartTask
 } = useTaskLogic(store, selectedDate, todayFormatted, currentTime)
 
-// ── Task data ────────────────────────────────────────────────────────────────
-const todayTasks = computed(() => {
-  const dateKey = todayFormatted.value
-  return store.getTasksSpanningDate(dateKey).sort((a: any, b: any) =>
-    (a.time || '99:99').localeCompare(b.time || '99:99'))
+// ── Start modal calendar grid ────────────────────────────────────────────────
+const monthNamesShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const weekDayLabels = ['S','M','T','W','T','F','S']
+
+const startCalendarTitle = computed(() => {
+  const d = startCalendarMonth.value
+  return `${monthNamesShort[d.getMonth()]} ${d.getFullYear()}`
 })
+
+const startCalendarCells = computed(() => {
+  const d = startCalendarMonth.value
+  const year = d.getFullYear()
+  const month = d.getMonth()
+  const firstDow = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells: Array<{ dateKey: string | null; day: number | null }> = []
+  for (let i = 0; i < firstDow; i++) cells.push({ dateKey: null, day: null })
+  for (let i = 1; i <= daysInMonth; i++) {
+    const dateKey = `${year}-${String(month + 1).padStart(2,'0')}-${String(i).padStart(2,'0')}`
+    cells.push({ dateKey, day: i })
+  }
+  return cells
+})
+
+const isPastDay = (dateKey: string | null): boolean => {
+  if (!dateKey) return false
+  return dateKey < todayFormatted.value
+}
+
+const fmtWorkDayLabel = (dateKey: string): string => {
+  const d = new Date(dateKey + 'T00:00:00')
+  return `${weekDayLabels[d.getDay() === 0 ? 0 : d.getDay()]} · ${monthNamesShort[d.getMonth()]} ${d.getDate()}`
+}
+
+// ── Task data ────────────────────────────────────────────────────────────────
+// Last-3-days dated tasks, newest first
+const todayTasks = computed(() => store.getRecentStartedTasks(3))
+
+// Unscheduled (not yet started) tasks
+const unscheduledTasks = computed(() => store.unscheduledTasks)
 
 const getTaskStatus = (task: any): string => {
   const dateKey = todayFormatted.value
@@ -74,7 +111,11 @@ const completionRate = computed(() => {
 // ── UI state ─────────────────────────────────────────────────────────────────
 const selectedTaskId = ref<string | null>(null)
 const showCompleted = ref(false)
-const selectedTask = computed(() => todayTasks.value.find((t: any) => t.id === selectedTaskId.value) || null)
+const selectedTask = computed(() => {
+  const inDated = todayTasks.value.find((t: any) => t.id === selectedTaskId.value)
+  if (inDated) return inDated
+  return unscheduledTasks.value.find((t: any) => t.id === selectedTaskId.value) || null
+})
 
 const selectTask = (taskId: string) => {
   selectedTaskId.value = selectedTaskId.value === taskId ? null : taskId
@@ -82,12 +123,12 @@ const selectTask = (taskId: string) => {
 const closePanel = () => { selectedTaskId.value = null }
 
 const openEditFromPanel = (task: any) => {
-  handleEditTask(task, todayFormatted.value)
+  handleEditTask(task, task.date || todayFormatted.value)
   closePanel()
 }
-const deleteFromPanel = (taskId: string) => {
+const deleteFromPanel = (task: any) => {
   if (!confirm('Delete this task?')) return
-  deleteTaskItem(taskId)
+  deleteTaskItem(task.id, task.date)
   closePanel()
 }
 
@@ -159,7 +200,7 @@ onMounted(async () => {
       <div class="flex items-center gap-2 flex-wrap">
         <span class="px-3 py-1.5 rounded-xl bg-[#0d1410] border border-[#1a2820] text-xs text-[#4a6b58] font-semibold flex items-center gap-1.5">
           <svg class="w-3 h-3 text-[#4ade80]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Today
+          Last 3 days
         </span>
         <span v-if="todayTasks.length > 0" class="px-3 py-1.5 rounded-xl bg-[#0d1410] border border-[#1a2820] text-xs text-[#4a6b58] font-semibold">
           {{ completionRate }}% done
@@ -236,8 +277,48 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- ══ UNSCHEDULED SECTION ═════════════════════════════════════════════ -->
+    <div v-if="unscheduledTasks.length > 0" class="bg-[#0d1410] border border-[#1a2820] rounded-2xl overflow-hidden">
+      <div class="flex items-center gap-2 px-4 py-2.5 bg-[#0a0f0b] border-b border-[#1a2820]">
+        <div class="w-2 h-2 rounded-full bg-[#4a6b58]" />
+        <span class="text-[10px] font-black text-[#8fb89f] uppercase tracking-widest">Unscheduled</span>
+        <span class="ml-1 text-[10px] font-bold text-[#4a6b58] bg-[#132218] px-1.5 py-0.5 rounded-full">{{ unscheduledTasks.length }}</span>
+        <span class="ml-auto text-[10px] text-[#3d5a4a]">Tap Start when you begin</span>
+      </div>
+      <div v-for="task in unscheduledTasks" :key="task.id"
+        @click="selectTask(task.id)"
+        :class="['flex items-center gap-3 px-4 py-3.5 border-b border-[#131e17] transition-all cursor-pointer group',
+          selectedTaskId === task.id ? 'bg-[#132218]/40 border-l-2 border-l-[#4ade80]/40' : 'hover:bg-[#111a14]']">
+        <div class="w-1 h-8 rounded-full bg-[#3d5a4a] flex-shrink-0" />
+        <div class="w-5 h-5 rounded-full border-2 border-[#2a4035] flex-shrink-0" />
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-sm font-semibold text-[#c8ddd5] truncate">{{ task.title }}</span>
+            <span v-if="task.priority === 'critical'" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-500/15 text-red-400 border border-red-500/25 flex-shrink-0">Critical</span>
+            <span v-else-if="task.priority === 'low'" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#4ade80]/10 text-[#4ade80]/80 border border-[#4ade80]/20 flex-shrink-0">Low</span>
+            <span v-if="task.meetingUrl" class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-400/15 text-blue-300 border border-blue-400/20 flex-shrink-0">Meeting</span>
+          </div>
+        </div>
+        <button @click.stop="openStartTask(task.id)"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4ade80]/10 border border-[#4ade80]/30 text-[#4ade80] text-xs font-bold hover:bg-[#4ade80]/20 active:scale-95 transition-all flex-shrink-0">
+          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start
+        </button>
+        <div class="flex items-center gap-1 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          <button @click.stop="openEditFromPanel(task)"
+            class="w-7 h-7 rounded-lg bg-[#132218] border border-[#1f3228] flex items-center justify-center text-[#4a6b58] hover:text-[#4ade80] hover:border-[#2a4035] transition-all">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button @click.stop="deleteFromPanel(task)"
+            class="w-7 h-7 rounded-lg bg-[#132218] border border-[#1f3228] flex items-center justify-center text-[#4a6b58] hover:text-red-400 hover:border-red-800/40 transition-all">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ EMPTY STATE ═════════════════════════════════════════════════════ -->
-    <div v-if="todayTasks.length === 0"
+    <div v-if="todayTasks.length === 0 && unscheduledTasks.length === 0"
       class="flex flex-col items-center justify-center py-16 text-center bg-[#0d1410] border border-dashed border-[#1a2820] rounded-2xl">
       <div class="w-14 h-14 rounded-2xl bg-[#132218] flex items-center justify-center mb-4">
         <svg class="w-7 h-7 text-[#2d4035]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -281,7 +362,7 @@ onMounted(async () => {
           <!-- Color bar -->
           <div class="w-1 h-8 rounded-full bg-yellow-400/70 flex-shrink-0" />
           <!-- Checkbox -->
-          <button @click.stop="toggleComplete(task.id)"
+          <button @click.stop="toggleComplete(task.id, task.date)"
             class="w-5 h-5 rounded-full border-2 border-yellow-400/40 flex items-center justify-center hover:border-yellow-400 transition-colors flex-shrink-0">
           </button>
           <!-- Title & info -->
@@ -321,7 +402,7 @@ onMounted(async () => {
               class="w-7 h-7 rounded-lg bg-[#132218] border border-[#1f3228] flex items-center justify-center text-[#4a6b58] hover:text-[#4ade80] hover:border-[#2a4035] transition-all">
               <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            <button @click.stop="deleteFromPanel(task.id)"
+            <button @click.stop="deleteFromPanel(task)"
               class="w-7 h-7 rounded-lg bg-[#132218] border border-[#1f3228] flex items-center justify-center text-[#4a6b58] hover:text-red-400 hover:border-red-800/40 transition-all">
               <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
             </button>
@@ -341,7 +422,7 @@ onMounted(async () => {
           :class="['flex items-center gap-3 px-4 py-3.5 border-b border-[#131e17] transition-all cursor-pointer group',
             selectedTaskId === task.id ? 'bg-blue-400/[0.03] border-l-2 border-l-blue-400/50' : 'hover:bg-[#111a14]']">
           <div class="w-1 h-8 rounded-full bg-blue-400/50 flex-shrink-0" />
-          <button @click.stop="toggleComplete(task.id)"
+          <button @click.stop="toggleComplete(task.id, task.date)"
             class="w-5 h-5 rounded-full border-2 border-[#2a4035] flex items-center justify-center hover:border-blue-400/60 transition-colors flex-shrink-0" />
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
@@ -369,7 +450,7 @@ onMounted(async () => {
               class="w-7 h-7 rounded-lg bg-[#132218] border border-[#1f3228] flex items-center justify-center text-[#4a6b58] hover:text-[#4ade80] hover:border-[#2a4035] transition-all">
               <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            <button @click.stop="deleteFromPanel(task.id)"
+            <button @click.stop="deleteFromPanel(task)"
               class="w-7 h-7 rounded-lg bg-[#132218] border border-[#1f3228] flex items-center justify-center text-[#4a6b58] hover:text-red-400 hover:border-red-800/40 transition-all">
               <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
             </button>
@@ -396,7 +477,7 @@ onMounted(async () => {
             :class="['flex items-center gap-3 px-4 py-3 border-b border-[#131e17] transition-all cursor-pointer group opacity-60 hover:opacity-80',
               selectedTaskId === task.id ? 'bg-[#4ade80]/[0.02] border-l-2 border-l-[#4ade80]/30' : 'hover:bg-[#0d1410]']">
             <div class="w-1 h-8 rounded-full bg-[#2a4035] flex-shrink-0" />
-            <button @click.stop="toggleComplete(task.id)"
+            <button @click.stop="toggleComplete(task.id, task.date)"
               class="w-5 h-5 rounded-full bg-[#4ade80]/20 border border-[#4ade80]/30 flex items-center justify-center hover:bg-[#4ade80]/30 transition-colors flex-shrink-0">
               <svg class="w-3 h-3 text-[#4ade80]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             </button>
@@ -410,11 +491,11 @@ onMounted(async () => {
             <div class="hidden md:flex w-28" />
             <div class="hidden lg:flex w-20" />
             <div class="flex items-center gap-1 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity w-16 justify-end">
-              <button @click.stop="toggleComplete(task.id)"
+              <button @click.stop="toggleComplete(task.id, task.date)"
                 class="w-7 h-7 rounded-lg bg-[#132218] border border-[#1f3228] flex items-center justify-center text-[#4a6b58] hover:text-[#4ade80] hover:border-[#2a4035] transition-all">
                 <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15"/></svg>
               </button>
-              <button @click.stop="deleteFromPanel(task.id)"
+              <button @click.stop="deleteFromPanel(task)"
                 class="w-7 h-7 rounded-lg bg-[#132218] border border-[#1f3228] flex items-center justify-center text-[#4a6b58] hover:text-red-400 hover:border-red-800/40 transition-all">
                 <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
               </button>
@@ -538,7 +619,7 @@ onMounted(async () => {
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               Edit Task
             </button>
-            <button @click="toggleComplete(selectedTask.id)"
+            <button @click="toggleComplete(selectedTask.id, selectedTask.date)"
               :class="['flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold active:scale-[0.98] transition-all border',
                 selectedTask.completed
                   ? 'bg-[#132218] border-[#2a4035] text-[#4a6b58] hover:border-[#4ade80]/30 hover:text-[#4ade80]'
@@ -547,7 +628,7 @@ onMounted(async () => {
               {{ selectedTask.completed ? 'Undo' : 'Mark Done' }}
             </button>
           </div>
-          <button @click="deleteFromPanel(selectedTask.id)"
+          <button @click="deleteFromPanel(selectedTask)"
             class="w-full py-2 rounded-xl text-xs font-semibold text-[#3d5a4a] hover:text-red-400 hover:bg-red-950/20 transition-all border border-transparent hover:border-red-900/30">
             Delete Task
           </button>
@@ -565,7 +646,9 @@ onMounted(async () => {
       <div class="sticky top-0 z-10 bg-[#0d1a11]/95 backdrop-blur-sm border-b border-[#1f3228] px-5 pt-4 pb-3.5 flex items-start justify-between rounded-t-2xl">
         <div>
           <h3 class="text-base font-bold text-[#c8ddd5]">{{ editingTaskId ? 'Edit Task' : 'New Task' }}</h3>
-          <p class="text-[10px] text-[#3d5a4a] mt-0.5 font-mono">{{ todayFormatted }}</p>
+          <p class="text-[10px] text-[#3d5a4a] mt-0.5 font-mono">
+            {{ editingTaskId ? (newTask.startDate || 'Unscheduled') : 'Unscheduled — start it later' }}
+          </p>
         </div>
         <button @click="() => { showAddForm = false; editingTaskId = null }"
           class="w-8 h-8 flex items-center justify-center rounded-xl bg-[#132218] border border-[#1f3228] text-[#4a6b58] hover:text-white hover:border-[#2a4035] active:scale-95 transition-all mt-0.5">
@@ -577,36 +660,10 @@ onMounted(async () => {
         <input v-model="newTask.title" type="text" placeholder="Task title *"
           class="w-full p-3.5 bg-[#0a0f0b] border border-[#1f3228] text-[#c8ddd5] rounded-xl text-sm outline-none focus:border-[#4ade80]/50 focus:ring-2 focus:ring-[#4ade80]/10 placeholder-[#2d4035] transition-all font-medium" />
 
-        <!-- Duration -->
-        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+        <!-- Time Range (edit only — created tasks are unscheduled until Start) -->
+        <div v-if="editingTaskId && newTask.startDate" class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
           <div class="px-3.5 py-2 border-b border-[#131e17]">
-            <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Duration (days)</span>
-          </div>
-          <div class="px-3.5 py-3">
-            <div class="flex items-center gap-3">
-              <button type="button" @click="newTask.durationDays = Math.max(1,(newTask.durationDays||1)-1)"
-                class="w-8 h-8 rounded-lg bg-[#132218] border border-[#2a4035] text-[#4ade80] text-lg font-bold flex items-center justify-center hover:bg-[#1a3020] active:scale-90 transition-all">-</button>
-              <input v-model.number="newTask.durationDays" type="number" min="1" max="365"
-                class="w-14 text-center p-2 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm font-bold outline-none focus:border-[#4ade80]/40" />
-              <button type="button" @click="newTask.durationDays = (newTask.durationDays||1)+1"
-                class="w-8 h-8 rounded-lg bg-[#132218] border border-[#2a4035] text-[#4ade80] text-lg font-bold flex items-center justify-center hover:bg-[#1a3020] active:scale-90 transition-all">+</button>
-              <span class="text-xs text-[#3d5a4a]">{{ newTask.durationDays === 1 ? 'single day' : 'days' }}</span>
-            </div>
-            <div v-if="endDatePreview" class="mt-2.5 flex items-center gap-2 text-[10px]">
-              <span class="text-[#4a6b58] font-mono">{{ todayFormatted }}</span>
-              <svg class="w-3 h-3 text-[#2d4035]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-              <span class="text-[#8fb89f] font-mono">{{ endDatePreview }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Time Range -->
-        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
-          <div class="px-3.5 py-2 border-b border-[#131e17] flex items-center justify-between">
             <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">Time Range</span>
-            <span v-if="newTask.durationDays > 1" class="text-[9px] text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded font-medium">
-              Today only
-            </span>
           </div>
           <div class="px-3.5 py-3 flex items-end gap-3">
             <div class="flex-1">
@@ -703,6 +760,60 @@ onMounted(async () => {
           </button>
           <button @click="() => { showAddForm = false; editingTaskId = null }"
             class="flex-1 py-3.5 rounded-xl font-semibold text-sm bg-[#0a0f0b] border border-[#1f3228] text-[#4a6b58] hover:border-[#2a4035] hover:text-[#8fb89f] active:scale-[0.98] transition-all">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ START TASK MODAL ════════════════════════════════════════════════════ -->
+  <div v-if="showStartForm"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4"
+    @click.self="cancelStartTask">
+    <div class="bg-[#0d1a11]/85 backdrop-blur-xl border border-[#1f3228] rounded-2xl shadow-2xl shadow-black/80 w-full max-w-md">
+      <div class="border-b border-[#1f3228] px-5 pt-4 pb-3.5 flex items-start justify-between">
+        <div>
+          <h3 class="text-base font-bold text-[#c8ddd5]">Start Task</h3>
+          <p class="text-[10px] text-[#3d5a4a] mt-0.5">Start now — pick when it should end</p>
+        </div>
+        <button @click="cancelStartTask"
+          class="w-8 h-8 flex items-center justify-center rounded-xl bg-[#132218] border border-[#1f3228] text-[#4a6b58] hover:text-white hover:border-[#2a4035] active:scale-95 transition-all">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="p-5 flex flex-col gap-3.5">
+        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl px-3.5 py-3">
+          <p class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest mb-1">Starts</p>
+          <p class="text-sm font-bold text-[#4ade80] font-mono">Now · {{ todayFormatted }} {{ currentTimeFormatted }}</p>
+        </div>
+
+        <div class="bg-[#0a0f0b] border border-[#1f3228] rounded-xl overflow-hidden">
+          <div class="px-3.5 py-2 border-b border-[#131e17]">
+            <span class="text-[10px] font-bold text-[#3d5a4a] uppercase tracking-widest">End</span>
+          </div>
+          <div class="px-3.5 py-3 flex flex-col sm:flex-row gap-3">
+            <div class="flex-1">
+              <div class="text-[9px] text-[#2d4035] mb-1.5 uppercase tracking-widest font-semibold">End date</div>
+              <input v-model="startForm.endDate" type="date"
+                class="w-full p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm outline-none focus:border-[#4ade80]/40 transition-all" />
+            </div>
+            <div class="flex-1">
+              <div class="text-[9px] text-[#2d4035] mb-1.5 uppercase tracking-widest font-semibold">End time</div>
+              <input v-model="startForm.endTime" type="time"
+                class="w-full p-2.5 bg-[#0d1410] border border-[#1f3228] text-[#c8ddd5] rounded-lg text-sm outline-none focus:border-[#4ade80]/40 transition-all" />
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-2.5 pt-0.5">
+          <button @click="confirmStartTask"
+            class="flex-1 py-3 rounded-xl font-bold text-sm bg-[#4ade80] text-[#070c09] hover:bg-[#22c55e] active:scale-[0.98] transition-all shadow-lg shadow-[#4ade80]/20 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Start Now
+          </button>
+          <button @click="cancelStartTask"
+            class="flex-1 py-3 rounded-xl font-semibold text-sm bg-[#0a0f0b] border border-[#1f3228] text-[#4a6b58] hover:border-[#2a4035] hover:text-[#8fb89f] active:scale-[0.98] transition-all">
             Cancel
           </button>
         </div>
