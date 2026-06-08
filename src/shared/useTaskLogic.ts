@@ -11,8 +11,8 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
 
      const newTask = ref<any>({
           title: '',
-          time: DEFAULT_TASK_START_TIME,
-          endTime: DEFAULT_TASK_END_TIME,
+          time: '',
+          endTime: '',
           description: '',
           completed: false,
           priority: 'medium' as 'critical' | 'medium' | 'low',
@@ -126,13 +126,14 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
      }
 
      const handleAddTask = () => {
-          if (!newTask.value.title || !selectedDate.value) return
+          if (!newTask.value.title) return
 
-          // For updates, use the task's ORIGINAL stored date (not the currently selected date)
-          // This fixes the bug where multi-day tasks couldn't be updated when viewed on a non-start date
-          const dateKey = editingTaskId.value
-               ? (editingTaskDateKey.value || formatDate(selectedDate.value))
-               : formatDate(selectedDate.value)
+          // Editing path keeps the task on its original date.
+          // Add path: tasks are unscheduled by default (dateKey = null).
+          const editing = !!editingTaskId.value
+          const dateKey = editing
+               ? (editingTaskDateKey.value || (selectedDate.value ? formatDate(selectedDate.value) : null))
+               : null
 
           const guests = (newTask.value.guestEmailsText || '')
                .split(/[,;]+/)
@@ -141,46 +142,52 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
 
           const durationDays = Number(newTask.value.durationDays) || 1
 
-          // For multi-day tasks, merge per-day time override into dailyTimes
-          const existingDailyTimes: Record<string, { time: string; endTime: string }> =
-               { ...(newTask.value.dailyTimes || {}) }
-
-          if (durationDays > 1) {
-               // Store the time set in the form as this day's override
-               existingDailyTimes[dateKey] = {
-                    time: newTask.value.time || DEFAULT_TASK_START_TIME,
-                    endTime: newTask.value.endTime || DEFAULT_TASK_END_TIME
+          if (editing) {
+               const existingDailyTimes: Record<string, { time: string; endTime: string }> =
+                    { ...(newTask.value.dailyTimes || {}) }
+               if (durationDays > 1 && dateKey) {
+                    existingDailyTimes[dateKey] = {
+                         time: newTask.value.time || DEFAULT_TASK_START_TIME,
+                         endTime: newTask.value.endTime || DEFAULT_TASK_END_TIME
+                    }
                }
-          }
-
-          const taskPayload = {
-               ...newTask.value,
-               guestEmails: guests,
-               durationDays,
-               startDate: editingTaskId.value
-                    ? (newTask.value.startDate || dateKey)
-                    : dateKey,
-               endDate: durationDays > 1
-                    ? addDaysToDate(editingTaskId.value ? (newTask.value.startDate || dateKey) : dateKey, durationDays - 1)
-                    : (editingTaskId.value ? (newTask.value.startDate || dateKey) : dateKey),
-               time: durationDays > 1 ? DEFAULT_TASK_START_TIME : (newTask.value.time || DEFAULT_TASK_START_TIME),
-               endTime: durationDays > 1 ? DEFAULT_TASK_END_TIME : (newTask.value.endTime || DEFAULT_TASK_END_TIME),
-               dailyTimes: existingDailyTimes
-          }
-
-          if (editingTaskId.value) {
-               store.updateTask(dateKey, {
-                    id: editingTaskId.value,
-                    ...taskPayload
-               })
+               const startDate = newTask.value.startDate || dateKey || ''
+               const taskPayload = {
+                    ...newTask.value,
+                    guestEmails: guests,
+                    durationDays,
+                    startDate,
+                    endDate: startDate
+                         ? (durationDays > 1 ? addDaysToDate(startDate, durationDays - 1) : startDate)
+                         : '',
+                    time: durationDays > 1 ? DEFAULT_TASK_START_TIME : (newTask.value.time || ''),
+                    endTime: durationDays > 1 ? DEFAULT_TASK_END_TIME : (newTask.value.endTime || ''),
+                    dailyTimes: existingDailyTimes
+               }
+               store.updateTask(dateKey, { id: editingTaskId.value, ...taskPayload })
           } else {
-               store.addTask(dateKey, taskPayload)
+               // Unscheduled add: only the descriptive fields. Start info is set later via Start.
+               const taskPayload = {
+                    title: newTask.value.title,
+                    description: newTask.value.description,
+                    completed: false,
+                    priority: newTask.value.priority,
+                    meetingType: newTask.value.meetingType,
+                    meetingUrl: newTask.value.meetingUrl,
+                    guestEmails: guests,
+                    projectId: newTask.value.projectId,
+                    durationDays: 1,
+                    time: '',
+                    endTime: '',
+                    dailyTimes: {}
+               }
+               store.addTask(null, taskPayload)
           }
 
           newTask.value = {
                title: '',
-               time: DEFAULT_TASK_START_TIME,
-               endTime: DEFAULT_TASK_END_TIME,
+               time: '',
+               endTime: '',
                description: '',
                completed: false,
                priority: 'medium',
@@ -195,6 +202,75 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           showAddForm.value = false
           editingTaskId.value = null
           editingTaskDateKey.value = null
+     }
+
+     // ── Start-task flow (multi-day calendar picker + per-day hour) ───────────
+     const showStartForm = ref(false)
+     const startingTaskId = ref<string | null>(null)
+     const startCalendarMonth = ref(new Date())   // currently displayed month
+     // Map of selected YYYY-MM-DD → start time HH:MM (1-hour slot)
+     const selectedWorkDays = ref<Record<string, string>>({})
+
+     const openStartTask = (taskId: string) => {
+          startingTaskId.value = taskId
+          const now = new Date()
+          startCalendarMonth.value = new Date(now.getFullYear(), now.getMonth(), 1)
+          const y = now.getFullYear()
+          const m = String(now.getMonth() + 1).padStart(2, '0')
+          const d = String(now.getDate()).padStart(2, '0')
+          const hh = String(now.getHours()).padStart(2, '0')
+          const mm = String(now.getMinutes()).padStart(2, '0')
+          selectedWorkDays.value = { [`${y}-${m}-${d}`]: `${hh}:${mm}` }
+          showStartForm.value = true
+     }
+
+     const toggleWorkDay = (dateKey: string) => {
+          if (selectedWorkDays.value[dateKey]) {
+               const next = { ...selectedWorkDays.value }
+               delete next[dateKey]
+               selectedWorkDays.value = next
+          } else {
+               // Default new day to 09:00, unless it's today — then use the current hour
+               const today = new Date()
+               const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+               const time = dateKey === todayKey
+                    ? `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`
+                    : '09:00'
+               selectedWorkDays.value = { ...selectedWorkDays.value, [dateKey]: time }
+          }
+     }
+
+     const setWorkDayTime = (dateKey: string, time: string) => {
+          if (!selectedWorkDays.value[dateKey]) return
+          selectedWorkDays.value = { ...selectedWorkDays.value, [dateKey]: time }
+     }
+
+     const moveStartMonth = (delta: number) => {
+          const m = startCalendarMonth.value
+          startCalendarMonth.value = new Date(m.getFullYear(), m.getMonth() + delta, 1)
+     }
+
+     /** Sorted list of selected work days for rendering the per-day time-picker list. */
+     const selectedWorkDaysSorted = computed(() =>
+          Object.entries(selectedWorkDays.value)
+               .map(([date, time]) => ({ date, time }))
+               .sort((a, b) => a.date.localeCompare(b.date))
+     )
+
+     const cancelStartTask = () => {
+          showStartForm.value = false
+          startingTaskId.value = null
+          selectedWorkDays.value = {}
+     }
+
+     const confirmStartTask = async () => {
+          if (!startingTaskId.value) return
+          const plan = selectedWorkDaysSorted.value
+          if (plan.length === 0) return
+          await store.startTask(startingTaskId.value, plan)
+          showStartForm.value = false
+          startingTaskId.value = null
+          selectedWorkDays.value = {}
      }
 
      const handleEditTask = (task: any, forDateKey?: string) => {
@@ -239,16 +315,16 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           showAddForm.value = true
      }
 
-     const toggleComplete = (taskId: string) => {
-          if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
-          const dateKey = formatDate(selectedDate.value)
-          store.toggleTaskComplete(dateKey, taskId)
+     const toggleComplete = (taskId: string, dateKey?: string) => {
+          const dk = dateKey || (selectedDate.value ? formatDate(selectedDate.value) : null)
+          if (!dk) return
+          store.toggleTaskComplete(dk, taskId)
      }
 
-     const deleteTaskItem = (taskId: string) => {
-          if (!selectedDate.value || isDateDisabled(selectedDate.value)) return
-          const dateKey = formatDate(selectedDate.value)
-          store.deleteTask(dateKey, taskId)
+     const deleteTaskItem = (taskId: string, dateKey?: string) => {
+          const dk = dateKey || (selectedDate.value ? formatDate(selectedDate.value) : null)
+          if (!dk) return
+          store.deleteTask(dk, taskId)
      }
 
      const openGoogleCalendarForTask = () => {
@@ -320,6 +396,18 @@ export function useTaskLogic(store: any, selectedDate: any, todayFormatted: any,
           openGoogleCalendarForTask,
           checkAndCompletePassedTasks,
           isCurrentTask,
-          isNextTask
+          isNextTask,
+          // Start-task modal
+          showStartForm,
+          startingTaskId,
+          startCalendarMonth,
+          selectedWorkDays,
+          selectedWorkDaysSorted,
+          openStartTask,
+          toggleWorkDay,
+          setWorkDayTime,
+          moveStartMonth,
+          cancelStartTask,
+          confirmStartTask
      }
 }

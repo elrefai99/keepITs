@@ -12,7 +12,7 @@ npm run type-check   # Run vue-tsc type checking only
 npm run preview      # Preview production build locally
 ```
 
-No lint or test scripts are configured.
+No lint or test scripts are configured. The committed lockfile is `pnpm-lock.yaml` (use `pnpm install`); the `npm run` script names above work under either package manager.
 
 ### Docker
 
@@ -28,7 +28,7 @@ docker compose up --build   # Build and run on http://localhost:8080
 
 | Layer | Location | Responsibility |
 |---|---|---|
-| Pages (views) | `src/pages/` | Routed views — `HomePage.vue`, `CalendarPage.vue`, `BoardPage.vue` |
+| Pages (views) | `src/pages/` | Routed views — `HomePage.vue`, `CalendarPage.vue`, `BoardPage.vue`, `ProjectsPage.vue` |
 | Components | `src/components/` | Shared UI — `navbar.vue`, `header.vue`, `Login.vue`, `darkmode.vue` |
 | Stores (Pinia) | `src/stores/` | Global reactive state with Firestore sync |
 | Composables | `src/shared/` | Reusable logic extracted from components (`useX` convention) |
@@ -38,6 +38,7 @@ docker compose up --build   # Build and run on http://localhost:8080
 ### Key Stores
 
 - `store.ts` — Main schedule store; holds tasks, handles multi-day task logic and per-day time overrides (`dailyTimes`)
+- `projects.ts` — Project state, synced via `src/firebase/projects.ts`
 - `auth.ts` — Firebase auth state (Google OAuth)
 - `user.ts` — User profile data
 
@@ -62,11 +63,13 @@ Tasks are keyed in Firestore as `{userId}_{dateKey}_{taskId}`. The `Task` interf
 
 ### Routing (`src/router/index.ts`)
 
-Three routes: `/` (Home), `/board` (Board), `/calendar` (Calendar). All page components are lazy-loaded.
+Four routes: `/` (Home), `/board` (Board), `/calendar` (Calendar), `/projects` (Projects). All page components are lazy-loaded.
 
 ### Styling
 
-UnoCSS (Tailwind-compatible) with three presets: `presetUno` (utility classes), `presetAttributify` (attribute mode, e.g. `text="green-400"`), `presetIcons` (e.g. `i-carbon-close`). Dark theme default (`#070c09` background, `#4ade80` green accent). Use `dark:` prefix for dark-mode variants. Custom shortcuts (`border-base`, `bg-base`, `bg-canvas`, `icon-btn`) are defined in `vite.config.ts`.
+UnoCSS (Tailwind-compatible) with three presets: `presetUno` (utility classes), `presetAttributify` (attribute mode, e.g. `text="green-400"`), `presetIcons` (e.g. `i-carbon-close`). Dark theme default (`#070c09` background, `#4ade80` green accent); dark mode is `class`-based (toggling a class, not media query). Use `dark:` prefix for dark-mode variants.
+
+> The effective UnoCSS config — presets plus the custom shortcuts (`border-base`, `bg-base`, `bg-canvas`, `icon-btn`) — lives **inline in `vite.config.ts`**. The root `uno.config.ts` is a separate, minimal config (no shortcuts) and is not what the build uses; edit `vite.config.ts` for shortcut/preset changes.
 
 ### Dev Proxy
 

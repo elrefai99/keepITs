@@ -15,21 +15,27 @@ import { db } from './config'
 export const DEFAULT_TASK_START_TIME = '09:00'
 export const DEFAULT_TASK_END_TIME = '10:00'
 
+/** Sentinel `date` value for tasks that have not yet been started */
+export const UNSCHEDULED_KEY = 'unscheduled'
+
 export interface Task {
      id: string
      title: string
-     // Time fields (optional for all-day / multi-day tasks)
-     time: string       // start time e.g. "09:00" — default for all days
-     endTime?: string   // end time e.g. "10:00" — default for all days
-     // Per-day time overrides for multi-day tasks: { "2026-03-01": { time: "10:00", endTime: "11:00" }, ... }
+     // Time fields — empty until the task is started
+     time: string       // start time e.g. "09:00" ('' for unscheduled)
+     endTime?: string   // end time e.g. "10:00"
+     // Per-day time overrides for multi-day tasks
      dailyTimes?: Record<string, { time: string; endTime: string }>
-     // Duration fields
-     durationDays?: number   // number of days (1 = single day, 4 = 4 days)
-     startDate: string       // YYYY-MM-DD  (primary date / anchor)
-     endDate?: string        // YYYY-MM-DD  auto-calculated from startDate + durationDays
+     durationDays?: number
+     /** Explicit list of working days (YYYY-MM-DD). Supports non-consecutive days. */
+     workDays?: string[]
+     startDate: string       // YYYY-MM-DD  ('' for unscheduled). For multi-day = first workDay.
+     endDate?: string        // YYYY-MM-DD                                last workDay.
      description: string
      completed: boolean
-     // Keep `date` as the primary Firestore lookup key (= startDate)
+     /** True once the user has clicked Start. False/undefined for unscheduled tasks. */
+     started?: boolean
+     // Firestore lookup key: startDate (for started tasks) or UNSCHEDULED_KEY
      date: string
      userId: string
      order?: number
@@ -67,7 +73,7 @@ export const saveTask = async (userId: string, dateKey: string, task: Omit<Task,
           const taskData: Task = {
                ...task,
                date: dateKey,
-               startDate: task.startDate || dateKey,
+               startDate: task.startDate ?? (dateKey === UNSCHEDULED_KEY ? '' : dateKey),
                userId,
                updatedAt: serverTimestamp()
           }
