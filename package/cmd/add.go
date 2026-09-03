@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/elrefai99/Qar/package/internal/command"
 	"github.com/elrefai99/Qar/package/utils"
 )
 
-func (c *Task) CreateTask(payload CreateTaskPayload) error {
+func (c *command.Task) CreateTask(payload command.CreateTaskPayload) error {
 	path := "json/file.json"
 
 	file, err := os.ReadFile(path)
@@ -15,7 +16,7 @@ func (c *Task) CreateTask(payload CreateTaskPayload) error {
 		return err
 	}
 
-	var task []Task
+	var task []command.Task
 
 	if err := json.Unmarshal(file, &task); err != nil {
 		return err
@@ -30,7 +31,7 @@ func (c *Task) CreateTask(payload CreateTaskPayload) error {
 	if err != nil {
 		return err
 	}
-	task = append(task, Task{
+	task = append(task, command.Task{
 		ID:   newId,
 		Uuid: uuid,
 	})
