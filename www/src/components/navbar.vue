@@ -126,7 +126,7 @@ async function handleLogout() {
           <!-- Logo -->
           <button @click="navigateTo('/')" class="flex items-center gap-2 select-none">
             <span class="text-xl font-black text-white tracking-tighter leading-none" style="font-family:'Georgia',serif">
-              Keep<span class="text-[#4ade80]">ITs</span>
+              Qar
             </span>
           </button>
 
@@ -328,7 +328,7 @@ async function handleLogout() {
             <button @click="handleLogout"
               class="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs text-[#3d5a4a] hover:text-red-400 hover:bg-red-950/20 transition-all font-medium">
               <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-              Sign out of KeepITs
+              Sign out of Qar
             </button>
           </div>
         </div>

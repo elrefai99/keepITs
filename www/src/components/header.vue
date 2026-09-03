@@ -54,7 +54,7 @@ import { useNotifications } from '../shared/useNotifications';
         </div>
         <div>
           <h1 class="text-lg sm:text-xl font-bold text-white tracking-tight" style="font-family:'Georgia',serif">
-            Keep<span class="text-[#4ade80]">ITs</span>
+            <span class="text-[#4ade80]">Qar</span>
           </h1>
           <div class="text-[10px] sm:text-xs text-[#4a6b58] font-mono mt-0.5">{{ todayFormatted }}</div>
         </div>

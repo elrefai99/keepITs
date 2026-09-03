@@ -174,11 +174,11 @@ export function useNotifications(store: any, todayFormatted: any, isBreakTime: a
                     playCriticalSound()
                     const message = `⚠️ Critical task time ended: "${task.title}" — please mark it done or it will remain open.`
                     if ('Notification' in window && Notification.permission === 'granted') {
-                         new Notification('KeepITs — Critical Task', { body: message })
+                         new Notification('Qar — Critical Task', { body: message })
                     } else if ('Notification' in window && Notification.permission !== 'denied') {
                          Notification.requestPermission().then(permission => {
                               if (permission === 'granted') {
-                                   new Notification('KeepITs — Critical Task', { body: message })
+                                   new Notification('Qar — Critical Task', { body: message })
                               }
                          })
                     }

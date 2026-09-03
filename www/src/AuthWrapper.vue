@@ -33,7 +33,7 @@ const showApp = computed(() => authStore.isAuthenticated && !authStore.loading)
             class="text-lg font-black text-white leading-none"
             style="font-family:'Georgia',serif"
           >
-        Keep<span class="text-[#4ade80]">ITs</span>. </span>
+        <span class="text-[#4ade80]">Qar</span>. </span>
           
         </div>
         <p class="text-[#4a6b58] text-sm font-light tracking-wide">Loading your workspace…</p>

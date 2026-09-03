@@ -39,8 +39,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.png', 'og-image.png', 'twitter-image.png'],
       manifest: {
-        name: 'KeepITs - Intelligent Schedule & Task Manager',
-        short_name: 'KeepITs',
+        name: 'Qar - Intelligent Schedule & Task Manager',
+        short_name: 'Qar',
         description: 'Manage your appointments, tasks, and schedule efficiently with Schedule Elrefai. A simple and powerful scheduling tool for professionals and individuals.',
         theme_color: '#4ade80',
         background_color: '#ffffff',
