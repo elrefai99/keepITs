@@ -41,9 +41,19 @@ const (
 	PriorityLow      Priority = "low"
 )
 
+type StatusType string
+
+const (
+	StatusDone       StatusType = "Done"
+	StatusPending    StatusType = "Pending"
+	StatusInProgress StatusType = "In Progress"
+	StatusStopped    StatusType = "Stopped"
+)
+
 type Task struct {
 	ID           uint64                       `json:"id" bson:"id"`
 	Uuid         string                       `json:"uuid" bson:"uuid"`
+	Status       *StatusType                  `json:"statusType,omitempty" bson:"statusType,omitempty"`
 	Title        string                       `json:"title" bson:"title"`
 	UserID       string                       `json:"userId" bson:"userId"`
 	Time         string                       `json:"time" bson:"time"`                           // e.g. "09:00" ('' for unscheduled)

@@ -33,3 +33,4 @@ coverage
 sw.js
 workbox-c28420ab.js
 dev-dist
+package/json

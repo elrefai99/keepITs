@@ -1,38 +1,31 @@
-package command
+package cmd
 
 import (
-	"encoding/json"
-	"os"
-
 	"github.com/elrefai99/Qar/package/internal/command"
 	"github.com/elrefai99/Qar/package/utils"
+	"github.com/spf13/cobra"
 )
 
-func (c *command.Task) CreateTask(payload command.CreateTaskPayload) error {
-	path := "json/file.json"
+func cobraCreate() *cobra.Command {
+	return &cobra.Command{
+		Use: "create",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := utils.ReadLine("Please enter title: ")
+			description := utils.ReadLine("Please enter description: ")
 
-	file, err := os.ReadFile(path)
-	if err != nil {
-		return err
+			task := &command.Task{}
+
+			if err := task.CreateTask(command.CreateTaskPayload{
+				Title:       name,
+				Description: description,
+			}); err != nil {
+				return err
+			}
+			return nil
+		},
 	}
+}
 
-	var task []command.Task
-
-	if err := json.Unmarshal(file, &task); err != nil {
-		return err
-	}
-
-	var newId uint64 = 1
-	if len(task) > 0 {
-		newId = task[len(task)-1].ID + 1
-	}
-
-	uuid, err := utils.NewUUID()
-	if err != nil {
-		return err
-	}
-	task = append(task, command.Task{
-		ID:   newId,
-		Uuid: uuid,
-	})
+func init() {
+	rootCmd.AddCommand(cobraCreate())
 }
