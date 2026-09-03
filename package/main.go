@@ -1,7 +1,18 @@
 package main
 
-import "github.com/elrefai99/Qar/package/cmd"
+import (
+	"log"
+
+	"github.com/elrefai99/Qar/package/cmd"
+	"github.com/elrefai99/Qar/package/database"
+)
 
 func main() {
+	db, err := database.ConnectDatabase()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
 	cmd.Execute()
 }

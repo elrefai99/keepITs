@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS tasks (
+    id BIGSERIAL PRIMARY KEY,
+    uuid UUID NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'Done',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
