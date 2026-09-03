@@ -1,6 +1,6 @@
-# KeepITs – Intelligent Schedule & Task Manager
+# Qar – Intelligent Schedule & Task Manager
 
-KeepITs is a modern, aesthetic **Vue 3 + Vite** schedule and task manager designed for deep work and day planning. It includes **Google sign-in (Firebase Auth)**, real-time **task sync (Cloud Firestore)**, a focused **Pomodoro-style timer**, and multiple views including Calendar, Kanban board, and classic list.
+Qar is a modern, aesthetic **Vue 3 + Vite** schedule and task manager designed for deep work and day planning. It includes **Google sign-in (Firebase Auth)**, real-time **task sync (Cloud Firestore)**, a focused **Pomodoro-style timer**, and multiple views including Calendar, Kanban board, and classic list.
 
 ## Features
 
@@ -65,8 +65,8 @@ KeepITs is a modern, aesthetic **Vue 3 + Vite** schedule and task manager design
 
 1.  **Clone the repository**
     ```bash
-    git clone https://github.com/elrefai99/keepITs.git
-    cd keepITs
+    git clone https://github.com/elrefai99/Qar.git
+    cd Qar
     ```
 
 2.  **Install dependencies**

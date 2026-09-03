@@ -22,7 +22,7 @@ docker compose up --build   # Build and run on http://localhost:8080
 
 ## Architecture
 
-**KeepITs** is a Vue 3 + TypeScript PWA for task/schedule management, backed by Firebase Firestore with real-time sync.
+**Qar** is a Vue 3 + TypeScript PWA for task/schedule management, backed by Firebase Firestore with real-time sync.
 
 ### Layer Structure
 

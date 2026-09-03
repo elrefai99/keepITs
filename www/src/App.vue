@@ -39,7 +39,7 @@ onMounted(async () => {
       </div>
 
       <footer class="mt-6 text-center pb-6">
-        <p class="text-xs text-[#2d4035]">&copy; {{ new Date().getFullYear() }} KeepITs · created by
+        <p class="text-xs text-[#2d4035]">&copy; {{ new Date().getFullYear() }} Qar · created by
           <a href="https://github.com/elrefai99" target="_blank" rel="noopener" class="text-[#4a6b58] hover:text-[#4ade80] transition-colors">elrefai99</a></p>
       </footer>
     </div>
