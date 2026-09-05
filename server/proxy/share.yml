@@ -1,8 +1,0 @@
-server:
-  host: "localhost"
-  listen_port: "20150"
-
-resources: 
-  - name: Server1 
-    endpoint: /server1 
-    destination_url: "http://localhost:20151"
